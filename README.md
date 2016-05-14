@@ -1,13 +1,13 @@
 # lua-resty-orm
-====
+----
 Simple ORM for [openresty](http://openresty.org) 
 
 #Status
-====
+----
 This library is not production ready.
 
 #Usage
-====
+----
 
 connect to database:
 ```
@@ -153,8 +153,8 @@ user:load(attrs) -- same as User.new(attrs)
 
 ```
 
-TODO
-====
+#TODO
+----
 
 * [db] postgresql support
 * [query] offset method
