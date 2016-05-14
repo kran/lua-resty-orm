@@ -9,7 +9,7 @@ This library is not production ready.
 #Usage
 ----
 
-connect to database:
+##connect to database:
 ```
 local orm = require'orm'.open{
   driver = 'mysql',
@@ -21,36 +21,36 @@ local orm = require'orm'.open{
   charset = 'utf8mb4'
 }
 ```
-orm.expr(expression)
+##orm.expr(expression)
 
 Create sql expression which will never be escaped.
 
-orm.create_query():
+##orm.create_query():
 
 This is the query builder, can now build select, update, insert, delete sql.
 ```
 local sql = orm.create_query():from('table_name'):where('[id] = ?d', 99):one()
 -- SELSECT * FROM table_name WHERE `id` = 99 LIMIT 1
 ```
-*from(table, alias):*
+###*from(table, alias):*
 ```
 query:from('table') -- SELECT * FROM table
 query:from('[table]') -- SELECT * FROM `table`
 query:from(another_query:from('user', 'u')) -- SELECT * FROM (SELECT * FROM user) AS u
 ```
-*select(fields):*
+###*select(fields):*
 ```
 query:select('t1, t2, [t3]') -- SELECT t1, t2, `t3` ...
 ```
 
-*where(cond, ...), and\_where(cond, ...), or_where(cond, ...):*
+###*where(cond, ...), and\_where(cond, ...), or_where(cond, ...):*
 ```
 query:where('id = ?d or [key] like ?s', '10', '"lua-%-orm"') -- WHERE id = 10 or `key` like '\"lua-%-orm\"'
 query:where('id in (?t)', 1) -- WHERE id in (1)
 query:where('id in (?t)', {1, 2, 'a'}) --WHERE id in (1,2,'a')
 -- ?t can be ?? if don't know type of param
 
---[[
+```
 ?t  table  {1,2,'a'} => 1,2,'a'
 ?b  bool(0, 1), only false or nil will be converted to 0
 ?e  expression: MAX(id) | MIN(id) ...
@@ -60,58 +60,55 @@ query:where('id in (?t)', {1, 2, 'a'}) --WHERE id in (1,2,'a')
 ??  any, convert by guessing the value type
 
 THESE modifiers can be used in where/having/join methods
-]]
 
-```
-
-*having(cond, ...), and_having(cond, ...), or_having(cond, ...):*
+###*having(cond, ...), and_having(cond, ...), or_having(cond, ...):*
 
 just like `where`
 
-*join(tbl, cond, ...), left\_join, right\_join, inner_join:*
+###*join(tbl, cond, ...), left\_join, right\_join, inner_join:*
 
 JOIN `tbl` ON `cond` , `...` params will be used in `cond`
 
-*group_by(...), order_by(...):*
+###*group_by(...), order_by(...):*
 
 Accept multiple `group by` | `order_by` expressions
 
-*limit([offset_num], limit_num):*
+###*limit([offset_num], limit_num):*
 
 `offset_num` is optional ( offset will have its own method in next commit )
 
-*as(alias):*
+###*as(alias):*
 
 Set alias for `select` type sql.
 
-*set(key, value), set(hashmap):*
+###*set(key, value), set(hashmap):*
 
 Used in the `UPDATE tbl SET ...` sql.
 
-*values(hashmap):*
+###*values(hashmap):*
 
 Used in the `INSERT INTO tbl (...) VALUES (...)`
 
-*delete(tbl), update(tbl), insert(tbl):*
+###*delete(tbl), update(tbl), insert(tbl):*
 
 Set the query type, `tbl` param is optional, which can also be setted by `from` method.
 
-*for_update():*
+###*for_update():*
 
 `SELECT * FROM tbl WHERE id=1 FOR UPDATE`
 
-*build():*
+###*build():*
 
 Return sql string
 
-*exec(callback), one(callback), all(callback):*
+###*exec(callback), one(callback), all(callback):*
 
 Send query to database, `one`|`all` are only for `select` query.
 
 `callback` is the handler function called after db return results. It should accept two params (status, result)
 
 
-orm.define_model(attributes):
+##orm.define_model(attributes):
 
 This method define a model like this:
 
