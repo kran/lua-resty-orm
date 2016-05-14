@@ -51,13 +51,13 @@ query:where('id in (?t)', {1, 2, 'a'}) --WHERE id in (1,2,'a')
 -- ?t can be ?? if don't know type of param
 
 ```
-?t  table  {1,2,'a'} => 1,2,'a'
-?b  bool(0, 1), only false or nil will be converted to 0
-?e  expression: MAX(id) | MIN(id) ...
-?d  digit number, convert by tonumber
-?n  NULL, false and nil wil be converted to 'NULL', orther 'NOT NULL'
-?s  string, escape by ngx.quote_sql_str
-??  any, convert by guessing the value type
+- `?t`  table  {1,2,'a'} => 1,2,'a'
+- `?b`  bool(0, 1), only false or nil will be converted to 0
+- `?e`  expression: MAX(id) | MIN(id) ...
+- `?d`  digit number, convert by tonumber
+- `?n`  NULL, false and nil wil be converted to 'NULL', orther 'NOT NULL'
+- `?s`  string, escape by ngx.quote_sql_str
+- `??`  any, convert by guessing the value type
 
 THESE modifiers can be used in where/having/join methods
 
