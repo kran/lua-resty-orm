@@ -1,4 +1,4 @@
-local fun = require'orm.fun'
+local fun = require'orm.func'
 local lpeg = require'lpeg'
 
 local table_insert = table.insert

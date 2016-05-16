@@ -1,4 +1,5 @@
 local mysql = require'resty.mysql'
+local quote_sql_str = ngx.quote_sql_str
 
 local open = function(conf)
     local connect = function()
@@ -14,6 +15,10 @@ local open = function(conf)
         end
 
         return db
+    end
+
+    local config = function()
+        return conf
     end
 
     local query = function(query_str)
@@ -36,9 +41,27 @@ local open = function(conf)
         return '`'
     end
 
+    local fetch_schema = function(table_name)
+        -- {Null="YES",Field="user_position",Type="varchar(45)",Extra="",Key="",Default=""}
+        local ok, res = query('desc ' .. table_name)
+        assert(ok, res)
+
+        local fields = { __table__ = table_name }
+        for _, f in ipairs(res) do
+            fields[f.Field] = f
+            if f.Key == 'PRI' then
+                fields.__pk__ = f.Field
+            end
+        end
+
+        return fields
+    end
+
     return { 
         query = query;
         get_quote_char = get_quote_char;
+        fetch_schema = fetch_schema;
+        config = config;
     }
 end
 

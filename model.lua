@@ -1,14 +1,35 @@
-local fun = require'orm.fun'
+local fun = require'orm.func'
+local cache = require'orm.cache'
+local table_concat = table.concat
 
-local function define_model(Query, attrs)
+local function define_model(DB, Query, attrs)
     local Model = {}
 
-    attrs = attrs or {  }
+    local typ = type(attrs)
+    if typ == 'string' then
+        local tname = attrs
+        local conf = DB.config()
+        local cache_key = table_concat({'orm', conf.host, conf.port, conf.database, tname}, '^') 
+        local data, stale = cache:get(cache_key)
+        if not data then
+            attrs = DB.fetch_schema(tname)
+            cache:set(cache_key, fun.table_clone(attrs), conf.expires)
+        else
+            attrs = fun.table_clone(data)
+        end
+    elseif typ == 'table' then
+        -- pass
+    else
+        error('attributes required')
+    end
+
 
     local table_name = attrs.__table__
+    assert(table_name, 'table name required')
     attrs.__table__ = nil
 
     local primary_key = attrs.__pk__ or 'id'
+    assert(attrs[primary_key], 'primary key required')
     attrs.__pk__ = nil
 
     local function filter_attrs(params)

@@ -9,13 +9,19 @@ local function open(conf)
     assert(ok, 'no driver for ' .. driver)
 
     local conn = db(conf)
+
     local create_query = function(func) 
         return Query.create(conn, func) 
     end
 
+    local define_model = function(attrs) 
+        return Model(conn, create_query, attrs) 
+    end
+
     return {
+        db = conn;
         create_query = create_query;
-        define_model = function(attrs) return Model(create_query, attrs) end;
+        define_model = define_model;
         expr        = Query.expr;
     }
 end

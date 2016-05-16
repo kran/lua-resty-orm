@@ -77,7 +77,7 @@ local function chain(...)
     local args = { ... }
     return function(...)
         local real_arg = {...}
-        for i=#args, 1, -1 do
+        for i=1, #args do
             real_arg = { args[i](unpack(real_arg)) }
         end
         return unpack(real_arg)
@@ -88,6 +88,7 @@ _M.chain = chain
 
 _M.table_keys = curry(kmap, function(k, v) return nil, k end)
 _M.table_vals = curry(map, function(v) return v end)
+_M.table_clone = curry(kmap, function(k,v) return k, v end)
 
 
 return _M
