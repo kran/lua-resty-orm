@@ -3,9 +3,10 @@ local quote_sql_str = ngx.quote_sql_str
 
 local open = function(conf)
     local connect = function()
-        local db = mysql:new()
-        local ok, err, errno, sqlstate = db:connect(conf)
+        local db, err = mysql:new()
+        assert(not err, "failed to create: ", err)
 
+        local ok, err, errno, sqlstate = db:connect(conf)
         assert(ok, "failed to connect: ", err, ": ", errno, " ", sqlstate)
 
         if conf.charset then
