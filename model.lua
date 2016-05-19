@@ -3,10 +3,12 @@ local cache = require'orm.cache'
 local table_concat = table.concat
 
 local function define_model(DB, Query, table_name)
-    local _init_model = function(Model)
-        assert(type(table_name) == 'string', 'table name required')
 
-        local attrs = false
+    assert(type(table_name) == 'string', 'table name required')
+
+    local _init_model = function(Model)
+
+        local attrs 
 
         local conf = DB.config()
         local cache_key = table_concat({'orm', conf.host, conf.port, conf.database, table_name}, '^') 
@@ -46,22 +48,11 @@ local function define_model(DB, Query, table_name)
         end
 
         Model.find_all = function(cond, ...)
-            local ok, res = Query():from(table_name):where(cond, ...):all(pop_models)
-            if ok and #res == 0 then
-                return false, "no record found"
-            end
-
-            return ok, res
+            return Query():from(table_name):where(cond, ...):all(pop_models)
         end
 
         Model.find_one = function(cond, ...)
-            local ok, res = Query():from(table_name):where(cond, ...):one(pop_models)
-
-            if ok and not res then
-                return false, "no record found"
-            end
-
-            return ok, res
+            return Query():from(table_name):where(cond, ...):one(pop_models)
         end
 
         Model.query = function()
