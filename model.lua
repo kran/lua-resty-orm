@@ -45,7 +45,7 @@ local function define_model(DB, Query, table_name)
             if not ok then return ok, rows end
 
             return ok, fun.map(function(row)
-                local model = Model.new(row, false)
+                local model = Model.new(row, true)
                 model:trigger('AfterFind')
                 return model
             end, rows)
@@ -151,12 +151,12 @@ local function define_model(DB, Query, table_name)
             end
         end
 
-        Model.new = function(data, dirty)
+        Model.new = function(data, not_dirty)
             local instance = { __attrs__ = {}, __rels__ = {}, __dirty_attrs__ = {}  }
             setmetatable(instance, Model)
 
             instance:load(data)
-            if not dirty then
+            if not_dirty then
                 instance:set_none_dirty()
             end
 
