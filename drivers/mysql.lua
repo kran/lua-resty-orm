@@ -1,5 +1,7 @@
 local mysql = require'resty.mysql'
 local quote_sql_str = ngx.quote_sql_str
+local assert = assert
+local ipairs = ipairs
 
 local open = function(conf)
     local connect = function()

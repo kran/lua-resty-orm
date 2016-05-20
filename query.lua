@@ -7,6 +7,8 @@ local ipairs, pairs = ipairs, pairs
 local strlen = string.len
 local tostring = tostring
 local type, unpack = type, unpack
+local setmetatable = setmetatable
+
 local P, R, S = lpeg.P, lpeg.R, lpeg.S
 local C, Ct, Cs = lpeg.C, lpeg.Ct, lpeg.Cs
 local quote_sql_str = ngx.quote_sql_str
@@ -94,7 +96,7 @@ local build_cond = function(condition, params)
     local pnum  = P'?d'/repl(tonumber)
     local pnil  = P'?n'/repl(function(arg) return arg and 'NOT NULL' or 'NULL'end)
     local pstr  = P'?s'/repl(quote_sql_str)
-    local pany  = P'??'/repl(quote_var)
+    local pany  = P'?'/repl(quote_var)
 
 
     local patt = Cs((porig + parr + pnum + pstr + pbool + pnil + pany + 1)^0)

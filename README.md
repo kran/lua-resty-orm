@@ -18,7 +18,8 @@ local orm = require'orm'.open{
   user = 'root',
   password = '123456',
   database = 'test',
-  charset = 'utf8mb4'
+  charset = 'utf8mb4',
+  expires = 100  -- cache expires time period
 }
 ```
 ##orm.expr(expression)
@@ -48,7 +49,7 @@ query:select('t1, t2, [t3]') -- SELECT t1, t2, `t3` ...
 query:where('id = ?d or [key] like ?s', '10', '"lua-%-orm"') -- WHERE id = 10 or `key` like '\"lua-%-orm\"'
 query:where('id in (?t)', 1) -- WHERE id in (1)
 query:where('id in (?t)', {1, 2, 'a'}) --WHERE id in (1,2,'a')
--- ?t can be ?? if don't know type of param
+-- ?t can be ? if don't know type of param
 
 ```
 - `?t`  table  {1,2,'a'} => 1,2,'a'
@@ -57,7 +58,7 @@ query:where('id in (?t)', {1, 2, 'a'}) --WHERE id in (1,2,'a')
 - `?d`  digit number, convert by tonumber
 - `?n`  NULL, false and nil wil be converted to 'NULL', orther 'NOT NULL'
 - `?s`  string, escape by ngx.quote_sql_str
-- `??`  any, convert by guessing the value type
+- `?`  any, convert by guessing the value type
 
 THESE modifiers can be used in where/having/join methods
 
@@ -108,17 +109,14 @@ Send query to database, `one`|`all` are only for `select` query.
 `callback` is the handler function called after db return results. It should accept two params (status, result)
 
 
-##orm.define_model(attributes):
+##orm.define_model(table_name):
+
+`define_model` accept table name as paramater and cache table fields in lrucache.
 
 This method define a model like this:
 
 ```
-local User = orm.define_model{
-  __table__ = 'user',
-  id = 'integer',
-  name = 'string',
-}
-
+local User = orm.define_model('tbl_user')
 -- fetch 
 local ok, users = User.find_all('id > ?d', 10)
 if ok then
@@ -130,14 +128,14 @@ end
 local ok, user = User.find_one('id = 10')
 if ok then
   user.name = 'new name'
-  local ok, res = user:save  -- update user
+  local ok, res = user:save()  -- update user
 end
 
 -- update
 local attrs = { name = 'name updated' }
-User.update_all(attrs, 'id > ??', 10) 
+User.update_all(attrs, 'id > ?', 10) 
 -- delete 
-User.delete_all('id = ??', 10) --delete all by condition
+User.delete_all('id = ?', 10) --delete all by condition
 user:delete()  -- delete user instance
 
 -- create new 

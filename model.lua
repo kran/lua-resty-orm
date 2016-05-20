@@ -1,13 +1,16 @@
 local fun = require'orm.func'
 local cache = require'orm.cache'
 local table_concat = table.concat
+local setmetatable = setmetatable
+local rawget = rawget
+local assert = assert
+local type = type
 
 local function define_model(DB, Query, table_name)
 
     assert(type(table_name) == 'string', 'table name required')
 
     local _init_model = function(Model)
-        ngx.say('HERE')
 
         local attrs 
 

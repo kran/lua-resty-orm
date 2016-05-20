@@ -1,5 +1,7 @@
 local table_insert = table.insert
 local unpack = unpack
+local ipairs = ipairs
+local pairs = pairs
 
 local _M = {  }
 

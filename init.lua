@@ -1,5 +1,7 @@
 local Query = require'orm.query'
 local Model = require'orm.model'
+local assert = assert
+local pcall = pcall
 
 local function open(conf)
     local driver = conf.driver
