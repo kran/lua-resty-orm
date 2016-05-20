@@ -133,9 +133,9 @@ end
 
 -- update
 local attrs = { name = 'name updated' }
-User.update_all(attrs, 'id > ?', 10) 
+User.update_where(attrs, 'id > ?', 10) 
 -- delete 
-User.delete_all('id = ?', 10) --delete all by condition
+User.delete_where('id = ?', 10) --delete all by condition
 user:delete()  -- delete user instance
 
 -- create new 

@@ -2,6 +2,9 @@ local mysql = require'resty.mysql'
 local quote_sql_str = ngx.quote_sql_str
 local assert = assert
 local ipairs = ipairs
+local table_concat = table.concat
+local table_insert = table.insert
+local ngx = ngx
 
 local open = function(conf)
     local connect = function()
@@ -25,11 +28,25 @@ local open = function(conf)
     end
 
     local query = function(query_str)
+        if conf.debug then
+            ngx.log(ngx.DEBUG, '[SQL] ' .. query_str)
+        end
+
         local db = connect()
         local res, err, errno, sqlstate = db:query(query_str)
-
         if not res then
-            return false, "bad result: ", err, ": ", errno, ": ", sqlstate, "."
+            return false, table_concat({"bad result: " .. err, errno, sqlstate}, ', ') 
+        end
+
+        if err == 'again' then res = { res } end
+        while err == "again" do
+            local tmp
+            tmp, err, errno, sqlstate = db:read_result()
+            if not tmp then
+                return false, table_concat({"bad result: " .. err, errno, sqlstate}, ', ') 
+            end
+
+            table_insert(res, tmp)
         end
 
         local ok, err = db:set_keepalive(10000, 50)
