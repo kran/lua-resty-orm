@@ -7,6 +7,7 @@ local function define_model(DB, Query, table_name)
     assert(type(table_name) == 'string', 'table name required')
 
     local _init_model = function(Model)
+        ngx.say('HERE')
 
         local attrs 
 
@@ -67,29 +68,26 @@ local function define_model(DB, Query, table_name)
             return Query():delete(table_name):where(cond, ...):exec()
         end
 
-
-        local ModelMeta = {}
-
-        ModelMeta.__index = function(self, key)
-            if ModelMeta[key] then
-                return ModelMeta[key]
+        Model.__index = function(self, key)
+            if Model[key] then
+                return Model[key]
             else
                 return self.__attrs__[key]
             end
         end
 
-        ModelMeta.__newindex = function(self, k, v)
+        Model.__newindex = function(self, k, v)
             if attrs[k] ~= nil then
                 self.__attrs__[k] = v
                 self.__dirty_attrs__[k] = true
             end
         end
 
-        function ModelMeta:set_dirty(attr)
+        function Model:set_dirty(attr)
             self.__dirty_attrs__[attr] = true
         end
 
-        function ModelMeta:get_dirty_attrs()
+        function Model:get_dirty_attrs()
             local count = 0
             local res = fun.kmap(function(k, v)
                 count = count + 1
@@ -98,7 +96,7 @@ local function define_model(DB, Query, table_name)
             return res, count
         end
 
-        function ModelMeta:save()
+        function Model:save()
             if self[primary_key] then -- update
                 self:trigger('BeforeSave')
                 local res = "no dirty attributes"
@@ -127,23 +125,23 @@ local function define_model(DB, Query, table_name)
             end
         end
 
-        function ModelMeta:set_none_dirty()
+        function Model:set_none_dirty()
             self.__dirty_attrs__ = {}
         end
 
-        function ModelMeta:delete()
+        function Model:delete()
             assert(self[primary_key], 'primary key ['.. primary_key .. '] required')
 
             return Query():delete(table_name):where(primary_key .. '= ?d', self[primary_key]):exec()
         end
 
-        function ModelMeta:load(data)
+        function Model:load(data)
             if type(data) == 'table' then
                 fun.kmap(function(k, v) self[k] = v end, data)
             end
         end
 
-        function ModelMeta:trigger(event, ...)
+        function Model:trigger(event, ...)
             local method = Model['on'..event]
             if type(method) == 'function' then
                 return method(self, ...)
@@ -152,7 +150,7 @@ local function define_model(DB, Query, table_name)
 
         Model.new = function(data, dirty)
             local instance = { __attrs__ = {}, __rels__ = {}, __dirty_attrs__ = {}  }
-            setmetatable(instance, ModelMeta)
+            setmetatable(instance, Model)
 
             instance:load(data)
             if not dirty then
