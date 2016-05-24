@@ -4,6 +4,7 @@ local assert = assert
 local ipairs = ipairs
 local table_concat = table.concat
 local table_insert = table.insert
+local lpeg = require'lpeg'
 local ngx = ngx
 
 local open = function(conf)
@@ -57,19 +58,26 @@ local open = function(conf)
         return true, res
     end
 
-    local get_quote_char = function()
-        return '`'
+    local escape_identity = function(id)
+        local qchar = '`'
+        local openp, endp = lpeg.P'[', lpeg.P']'
+        local quote_pat = openp * lpeg.C(( 1 - endp)^1) * endp
+        local repl = qchar .. '%1' .. qchar
+        return lpeg.Cs((quote_pat/repl + 1)^0):match(id)
     end
 
-    local fetch_schema = function(table_name)
+    local get_schema = function(table_name)
         -- {Null="YES",Field="user_position",Type="varchar(45)",Extra="",Key="",Default=""}
-        local ok, res = query('desc ' .. table_name)
+        local ok, res = query('desc ' .. escape_identity(table_name))
         assert(ok, res)
 
-        local fields = { __table__ = table_name }
+        local fields = {  }
         for _, f in ipairs(res) do
             fields[f.Field] = f
             if f.Key == 'PRI' then
+                if fields.__pk__ then
+                    error('not implement for tables have multiple pk')
+                end
                 fields.__pk__ = f.Field
             end
         end
@@ -79,9 +87,9 @@ local open = function(conf)
 
     return { 
         query = query;
-        get_quote_char = get_quote_char;
-        fetch_schema = fetch_schema;
+        get_schema = get_schema;
         config = config;
+        escape_identity = escape_identity;
     }
 end
 

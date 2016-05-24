@@ -12,8 +12,8 @@ local function open(conf)
 
     local conn = db(conf)
 
-    local create_query = function(func) 
-        return Query.create(conn, func) 
+    local create_query = function() 
+        return Query.create(conn) 
     end
 
     local define_model = function(attrs) 

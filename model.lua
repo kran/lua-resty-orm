@@ -9,6 +9,7 @@ local type = type
 local function define_model(DB, Query, table_name)
 
     assert(type(table_name) == 'string', 'table name required')
+    table_name = DB.escape_identity(table_name)
 
     local _init_model = function(Model)
 
@@ -19,16 +20,15 @@ local function define_model(DB, Query, table_name)
         local data, stale = cache:get(cache_key)
 
         if not data then
-            attrs = DB.fetch_schema(table_name)
+            attrs = DB.get_schema(table_name)
             cache:set(cache_key, fun.table_clone(attrs), conf.expires)
         else
             attrs = fun.table_clone(data)
         end
 
         assert(attrs, 'initializing model failed')
-
-        local primary_key = attrs.__pk__ or 'id'
-        assert(attrs[primary_key], 'primary key required')
+        assert(attrs.__pk__, 'primary key required')
+        local pk = attrs.__pk__
         attrs.__pk__ = nil
 
         local function filter_attrs(params)
@@ -51,24 +51,48 @@ local function define_model(DB, Query, table_name)
             end, rows)
         end
 
-        Model.find_all = function(cond, ...)
-            return Query():from(table_name):where(cond, ...):all(pop_models)
-        end
-
-        Model.find_one = function(cond, ...)
-            return Query():from(table_name):where(cond, ...):one(pop_models)
-        end
-
-        Model.query = function()
+        local function query()
             return Query():from(table_name)
         end
 
+        Model.find = function()
+            local q = query()
+            getmetatable(q).__call = function(self)
+                if self._state == 'select' then
+                    return pop_models(self:exec())
+                end
+                return self:exec()
+            end
+
+            return q
+        end
+
+        Model.group = function(expr, cond, ...)
+            local ok, res = query():select(expr .. ' AS _res'):where(cond, ...)()
+            return res._res, res
+        end
+
+        Model.count = function(cond, ...)
+            return Model.group('COUNT(*)', cond, ...)
+        end
+
+        Model.find_all = function(cond, ...)
+            return Model.find():where(cond, ...)()
+        end
+
+        Model.find_one = function(cond, ...)
+            local ok, records = Model.find():where(cond, ...):limit(1)()
+
+            if ok then records = records[1] end
+            return ok, records
+        end
+
         Model.update_where = function(set, cond, ...)
-            return Query():update(table_name):where(cond, ...):set(set):exec()
+            return query():update():where(cond, ...):set(set)()
         end
 
         Model.delete_where = function(cond, ...)
-            return Query():delete(table_name):where(cond, ...):exec()
+            return query():delete():where(cond, ...)()
         end
 
         Model.__index = function(self, key)
@@ -84,6 +108,8 @@ local function define_model(DB, Query, table_name)
                 self.__attrs__[k] = v
                 self.__dirty_attrs__[k] = true
             end
+
+            rawset(self, k, v)
         end
 
         function Model:set_dirty(attr)
@@ -100,13 +126,15 @@ local function define_model(DB, Query, table_name)
         end
 
         function Model:save()
-            if self[primary_key] then -- update
+            if self[pk] then -- update
+
                 self:trigger('BeforeSave')
+
                 local res = "no dirty attributes"
                 local ok = false
                 local dirty_attrs, count = self:get_dirty_attrs()
                 if count > 0 then
-                    ok, res = Query():update(table_name):where(primary_key .. ' = ?d ', self[primary_key]):set(dirty_attrs):exec()
+                    ok, res = query():update():where(pk .. ' = ?d ', self[pk]):set(dirty_attrs)()
 
                     if ok then
                         self:set_none_dirty()
@@ -115,13 +143,16 @@ local function define_model(DB, Query, table_name)
 
                 return ok, res
             else -- insert
+
                 self:trigger('BeforeSave')
-                local ok, res = Query():insert(table_name):values(self.__attrs__):exec()
+
+                local ok, res = query():insert():values(self.__attrs__)()
 
                 if ok then 
-                    self[primary_key] = res.insert_id
+                    self[pk] = res.insert_id
                     self:set_none_dirty()
-                    return ok, res.insert_id
+                    self.__is_new__ = false
+                    return ok, res
                 else
                     return false, res
                 end
@@ -133,14 +164,16 @@ local function define_model(DB, Query, table_name)
         end
 
         function Model:delete()
-            assert(self[primary_key], 'primary key ['.. primary_key .. '] required')
+            assert(self[pk], 'primary key ['.. pk .. '] required')
 
-            return Query():delete(table_name):where(primary_key .. '= ?d', self[primary_key]):exec()
+            return query():delete():where(pk .. '= ?d', self[pk])()
         end
 
         function Model:load(data)
             if type(data) == 'table' then
-                fun.kmap(function(k, v) self[k] = v end, data)
+                fun.kmap(function(k, v) 
+                    self[k] = v 
+                end, data)
             end
         end
 
@@ -151,30 +184,30 @@ local function define_model(DB, Query, table_name)
             end
         end
 
+        function Model:is_new()
+            return self.__is_new__
+        end
+
         Model.new = function(data, not_dirty)
-            local instance = { __attrs__ = {}, __rels__ = {}, __dirty_attrs__ = {}  }
+            local instance = { __attrs__ = {}, __dirty_attrs__ = {} , __is_new__ = true }
             setmetatable(instance, Model)
 
             instance:load(data)
             if not_dirty then
                 instance:set_none_dirty()
+                -- while loading from db, records are not new
+                instance.__is_new__ = false
             end
 
             return instance
         end
 
         setmetatable(Model, nil)
-        -- return Model
     end
-
-    local initialized = false
 
     return setmetatable({}, {
         __index = function(self, key)
-            if not initialized then
-                _init_model(self)
-                initialized = true
-            end
+            _init_model(self)
             return rawget(self, key)
         end
     })

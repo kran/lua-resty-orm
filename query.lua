@@ -20,12 +20,6 @@ local function isqb(tbl)
     return type(tbl) == 'table' and tbl._type == 'query'
 end
 
-local function quote_key(qchar, key)
-    local openp, endp = P'[', P']'
-    local quote_pat = openp * C(( 1 - endp)^1) * endp
-    local repl = qchar .. '%1' .. qchar
-    return Cs((quote_pat/repl + 1)^0):match(key)
-end
 
 
 local function quote_var(val)
@@ -107,27 +101,9 @@ local build_cond = function(condition, params)
 
 end
 
-_T.one = function(self, callback)
-    assert(self._state == 'select', 'select context required')
 
-    local ok, res = self:limit(1):exec(callback)
-    if ok then res = res[1] end
-    return ok, res
-end
-
-
-_T.exec = function(self, callback)
-    local ok, res = self._db.query(self:build())
-    if callback then
-        return callback(ok, res)
-    else
-        return ok, res
-    end
-end
-
-_T.all = function(self, callback)
-    assert(self._state == 'select', 'select context required')
-    return self:exec(callback)
+_T.exec = function(self)
+    return self._db.query(self:build())
 end
 
 _T.from = function(self, tname, alias)
@@ -136,23 +112,19 @@ _T.from = function(self, tname, alias)
         self._from = tname:build()
     else
         if alias then tname = tname .. ' ' .. alias end
-        self._from = self:quote_key(tname) 
+        self._from = self._db.escape_identity(tname) 
     end
 
     return self
 end
 
 _T.build_where = function(self, cond, params) 
-    cond = self:quote_key(cond)
+    cond = self._db.escape_identity(cond)
     return build_cond(cond, params)
 end
 
-_T.quote_key = function (self, key)
-    return quote_key(self._quote_char, key)
-end
-
 _T.select = function(self, fields)
-    self._select = self:quote_key(fields)
+    self._select = self._db.escape_identity(fields)
     return self
 end
 
@@ -193,9 +165,9 @@ _T.or_having = function(self, condition, ...)
 end
 
 _T.join = function(self, tbl, mode, cond, param)
-    local cond = build_cond(self:quote_key(cond), param)
+    local cond = build_cond(self._db.escape_identity(cond), param)
     if not self._join then self._join = '' end
-    self._join =  table_concat({self._join, mode, 'JOIN', self:quote_key(tbl), 'ON', cond}, ' ')
+    self._join =  table_concat({self._join, mode, 'JOIN', self._db.escape_identity(tbl), 'ON', cond}, ' ')
     return self
 end
 
@@ -218,9 +190,9 @@ _T.group_by = function(self, ...)
    if #args > 0 then
         self._group_by = fun.reduce(function(k, v, acc) 
             if not acc then 
-                return self:quote_key(v)
+                return self._db.escape_identity(v)
             else
-                return acc .. ', ' .. self:quote_key(v) 
+                return acc .. ', ' .. self._db.escape_identity(v) 
             end
         end, false, args)
     end
@@ -234,17 +206,26 @@ _T.order_by = function(self, ...)
    if #args > 0 then
         self._order_by = fun.reduce(function(k, v, acc) 
             if not acc then 
-                return self:quote_key(v)
+                return self._db.escape_identity(v)
             else
-                return acc .. ', ' .. self:quote_key(v) 
+                return acc .. ', ' .. self._db.escape_identity(v) 
             end
         end, false, args)
    end
    return self
 end
 
-_T.limit = function(self, ...)
-    self._limit = table_concat({...}, ', ')
+_T.limit = function(self, arg)
+    self._limit = tonumber(arg)
+    return self
+end
+
+_T.offset = function(self, arg)
+    self._offset = tonumber(arg)
+
+    if self._offset and not self._limit then
+        self._limit = 18446744073709551615;
+    end
     return self
 end
 
@@ -342,6 +323,7 @@ _T.build = function(self, ...)
                 {'HAVING',   _make(self._having)},
                 {'ORDER BY', self._order_by},
                 {'LIMIT',    self._limit },
+                {'OFFSET',    self._offset },
                 {'', self._for_update} -- for update
             }, " ")
 
@@ -365,9 +347,9 @@ _T.build = function(self, ...)
                 { 'SET',  fun.reduce(function(k, v, acc)
                     local where = ''
                     if type(k) == 'number' then 
-                        where = self:quote_key(v)
+                        where = self._db.escape_identity(v)
                     else
-                        where = self:quote_key(k) .. '=' .. quote_var(v)
+                        where = self._db.escape_identity(k) .. '=' .. quote_var(v)
                     end
                     if not acc then return where end
                     return acc .. ', ' .. where
@@ -385,7 +367,7 @@ _T.build = function(self, ...)
 
             return table_concat(concat{
                 { 'INSERT INTO', self._from },
-                { '', '('.. self:quote_key(table_concat(keys, ', ')) .. ')'},
+                { '', '('.. self._db.escape_identity(table_concat(keys, ', ')) .. ')'},
                 { 'VALUES', '(' .. table_concat(vals, ', ') .. ')' }
             }, ' ')
 
@@ -400,7 +382,6 @@ local function create_query(db)
 
     local qb = {
         _db         = db,
-        _quote_char = db.get_quote_char(),
         _state      = 'select',
         _type       = 'query',
 
@@ -412,6 +393,7 @@ local function create_query(db)
         _having      = false,
         _group_by    = false,
         _limit       = false,
+        _offset      = false,
         _alias       = false,
         _order_by    = false,
         _set         = false,
@@ -427,6 +409,9 @@ local function create_query(db)
         __tostring = function(self)
             return self:build()
         end;
+        __call = function(self, ...)
+            return self:exec(...)
+        end
     }
 
     return setmetatable(qb, mt)
