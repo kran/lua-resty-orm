@@ -216,12 +216,12 @@ _T.order_by = function(self, ...)
 end
 
 _T.limit = function(self, arg)
-    self._limit = tonumber(arg)
+    self._limit = arg
     return self
 end
 
 _T.offset = function(self, arg)
-    self._offset = tonumber(arg)
+    self._offset = arg
 
     if self._offset and not self._limit then
         self._limit = '18446744073709551615';
