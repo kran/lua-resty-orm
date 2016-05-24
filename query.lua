@@ -141,12 +141,12 @@ _T.where = function(self, condition, ...)
 end
 
 _T.or_where = function(self, condition, ...)
-    add_cond(self, '_where', 'AND', condition, {...})
+    add_cond(self, '_where', 'OR', condition, {...})
     return self
 end
 
 _T.and_where = function(self, condition, ...)
-    add_cond(self, '_where', 'OR', condition, {...})
+    add_cond(self, '_where', 'AND', condition, {...})
     return self
 end
 
@@ -224,7 +224,7 @@ _T.offset = function(self, arg)
     self._offset = tonumber(arg)
 
     if self._offset and not self._limit then
-        self._limit = 18446744073709551615;
+        self._limit = '18446744073709551615';
     end
     return self
 end

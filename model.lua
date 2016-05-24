@@ -68,8 +68,14 @@ local function define_model(DB, Query, table_name)
         end
 
         Model.group = function(expr, cond, ...)
-            local ok, res = query():select(expr .. ' AS _res'):where(cond, ...)()
-            return res._res, res
+            local q = query():select(expr .. ' AS group__res')
+            if cond then q:where(cond, ...) end
+
+            local ok, res = q()
+            if ok and #res > 0 then
+                return res[1].group__res
+            end
+            return nil
         end
 
         Model.count = function(cond, ...)
@@ -108,8 +114,6 @@ local function define_model(DB, Query, table_name)
                 self.__attrs__[k] = v
                 self.__dirty_attrs__[k] = true
             end
-
-            rawset(self, k, v)
         end
 
         function Model:set_dirty(attr)
