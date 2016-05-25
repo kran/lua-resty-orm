@@ -130,6 +130,7 @@ end
 
 
 local function add_cond(self, field, op, cond, params)
+    if not cond then return end
     if not params then params = {} end
     if type(self[field]) ~= 'table' then self[field] = {} end
 
@@ -165,6 +166,8 @@ _T.or_having = function(self, condition, ...)
 end
 
 _T.join = function(self, tbl, mode, cond, param)
+    if not cond then return end
+
     local cond = build_cond(self._db.escape_identity(cond), param)
     if not self._join then self._join = '' end
     self._join =  table_concat({self._join, mode, 'JOIN', self._db.escape_identity(tbl), 'ON', cond}, ' ')
@@ -184,10 +187,10 @@ _T.inner_join = function(self, tbl, cond, ...)
 end
 
 _T.group_by = function(self, ...)
-   self._group_by = false
+    self._group_by = false
 
-   local args = { ... }
-   if #args > 0 then
+    local args = { ... }
+    if #args > 0 then
         self._group_by = fun.reduce(function(k, v, acc) 
             if not acc then 
                 return self._db.escape_identity(v)
@@ -196,14 +199,13 @@ _T.group_by = function(self, ...)
             end
         end, false, args)
     end
-   return self
+    return self
 end
 
 _T.order_by = function(self, ...)
-   self._order_by = false
-
-   local args = { ... }
-   if #args > 0 then
+    self._order_by = false
+    local args = { ... }
+    if #args > 0 then
         self._order_by = fun.reduce(function(k, v, acc) 
             if not acc then 
                 return self._db.escape_identity(v)
@@ -211,16 +213,20 @@ _T.order_by = function(self, ...)
                 return acc .. ', ' .. self._db.escape_identity(v) 
             end
         end, false, args)
-   end
-   return self
+    end
+    return self
 end
 
 _T.limit = function(self, arg)
+    if not tonumber(arg) then return self end
+
     self._limit = arg
     return self
 end
 
 _T.offset = function(self, arg)
+    if not tonumber(arg) then return self end
+
     self._offset = arg
 
     if self._offset and not self._limit then

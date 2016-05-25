@@ -8,8 +8,22 @@ local type = type
 
 local function define_model(DB, Query, table_name)
 
+    local _M = {  }
+    local _relations = {  }
+
     assert(type(table_name) == 'string', 'table name required')
     table_name = DB.escape_identity(table_name)
+
+    _M.table_name = function() 
+        return table_name 
+    end
+
+    -- User.has_one{ model = 'models.profile', as = 'profile', link = { 'user_id', 'id'} }
+    _M.has_one = function(conf)
+        _relations[conf.as] = conf
+    end
+
+    _M.has_many = _M.has_one
 
     local _init_model = function(Model)
 
@@ -55,7 +69,7 @@ local function define_model(DB, Query, table_name)
             return Query():from(table_name)
         end
 
-        Model.find = function()
+        Model.find = function(with)
             local q = query()
             getmetatable(q).__call = function(self)
                 if self._state == 'select' then
@@ -66,6 +80,17 @@ local function define_model(DB, Query, table_name)
 
             return q
         end
+
+        -- if with then
+        --     with = type(with) == 'string' and { with } or with
+        --     for _, w in with do
+        --         local rel = _relations[w]
+        --         if not rel then
+        --             error('relation '..w..' not found')
+        --         end
+        --         self:left_join(require(conf.model).table_name(), )
+        --     end
+        -- end
 
         Model.group = function(expr, cond, ...)
             local q = query():select(expr .. ' AS group__res')
