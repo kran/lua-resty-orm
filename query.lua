@@ -11,36 +11,12 @@ local setmetatable = setmetatable
 
 local P, R, S = lpeg.P, lpeg.R, lpeg.S
 local C, Ct, Cs = lpeg.C, lpeg.Ct, lpeg.Cs
-local quote_sql_str = ngx.quote_sql_str
 
 local _T = {}  
 
 
 local function isqb(tbl)
     return type(tbl) == 'table' and tbl._type == 'query'
-end
-
-
-
-local function quote_var(val)
-    local typ = type(val)
-
-    if typ == 'boolean' then
-        return val and 1 or 0
-    elseif typ == 'string' then
-        return quote_sql_str(val)
-    elseif typ == 'number' then
-        return val
-    elseif typ == 'nil' then
-        return "NULL"
-    elseif typ == 'table' then
-        if val._type then 
-            return tostring(val) 
-        end
-        return table_concat(fun.map(quote_var, val), ', ')
-    else
-        return tostring(val)
-    end
 end
 
 local expr = function(str)
@@ -60,7 +36,7 @@ local expr = function(str)
     })
 end
 
-local build_cond = function(condition, params)
+local build_cond = function(self, condition, params)
     if not params then params = {} end
 
     local replace_param = function(args)
@@ -82,15 +58,15 @@ local build_cond = function(condition, params)
             arg = { arg }
         end
 
-        return quote_var(arg)
+        return self.escape_literal(arg)
     end)
     local pbool = P'?b'/repl(function(arg) return arg and 1 or 0 end)
     local porig = P'?e'/repl(tostring)
     -- local pgrp  = P'?p'/repl(function(arg) return '('.. tostring(arg) ..')' end)
     local pnum  = P'?d'/repl(tonumber)
     local pnil  = P'?n'/repl(function(arg) return arg and 'NOT NULL' or 'NULL' end)
-    local pstr  = P'?s'/repl(quote_sql_str)
-    local pany  = P'?'/repl(quote_var)
+    local pstr  = P'?s'/repl(self.quote_sql_str)
+    local pany  = P'?'/repl(self.escape_literal)
 
 
     local patt = Cs((porig + parr + pnum + pstr + pbool + pnil + pany + 1)^0)
@@ -103,7 +79,17 @@ end
 
 
 _T.exec = function(self)
-    return self._db.query(self:build())
+    local ok, res = self._db.query(self:build())
+    if ok and self._state == 'insert' then
+        local as = self._returning_as
+        if as and not res[as] then
+            if #res == 1 then
+                res[as] = res[1][self._returning]
+            end
+        end
+    end
+
+    return ok, res
 end
 
 _T.from = function(self, tname, alias)
@@ -112,25 +98,25 @@ _T.from = function(self, tname, alias)
         self._from = tname:build()
     else
         if alias then tname = tname .. ' ' .. alias end
-        self._from = self._db.escape_identity(tname) 
+        self._from = self.escape_identifier(tname) 
     end
 
     return self
 end
 
 _T.build_where = function(self, cond, params) 
-    cond = self._db.escape_identity(cond)
-    return build_cond(cond, params)
+    cond = self.escape_identifier(cond)
+    return build_cond(self, cond, params)
 end
 
 _T.select = function(self, fields)
-    self._select = self._db.escape_identity(fields)
+    self._select = self.escape_identifier(fields)
     return self
 end
 
 
 local function add_cond(self, field, op, cond, params)
-    if not cond then return end
+    if not cond or cond:len() == 0 then return end
     if not params then params = {} end
     if type(self[field]) ~= 'table' then self[field] = {} end
 
@@ -168,9 +154,9 @@ end
 _T.join = function(self, tbl, mode, cond, param)
     if not cond then return end
 
-    local cond = build_cond(self._db.escape_identity(cond), param)
+    local cond = build_cond(self, self.escape_identifier(cond), param)
     if not self._join then self._join = '' end
-    self._join =  table_concat({self._join, mode, 'JOIN', self._db.escape_identity(tbl), 'ON', cond}, ' ')
+    self._join =  table_concat({self._join, mode, 'JOIN', self.escape_identifier(tbl), 'ON', cond}, ' ')
     return self
 end
 
@@ -193,9 +179,9 @@ _T.group_by = function(self, ...)
     if #args > 0 then
         self._group_by = fun.reduce(function(k, v, acc) 
             if not acc then 
-                return self._db.escape_identity(v)
+                return self.escape_identifier(v)
             else
-                return acc .. ', ' .. self._db.escape_identity(v) 
+                return acc .. ', ' .. self.escape_identifier(v) 
             end
         end, false, args)
     end
@@ -208,9 +194,9 @@ _T.order_by = function(self, ...)
     if #args > 0 then
         self._order_by = fun.reduce(function(k, v, acc) 
             if not acc then 
-                return self._db.escape_identity(v)
+                return self.escape_identifier(v)
             else
-                return acc .. ', ' .. self._db.escape_identity(v) 
+                return acc .. ', ' .. self.escape_identifier(v) 
             end
         end, false, args)
     end
@@ -292,6 +278,14 @@ _T.for_update = function(self)
     return self
 end
 
+_T.returning = function(self, column, as)
+    self._returning = self._db.returning(column)
+    if self._returning then 
+        self._returning_as = as 
+    end
+    return self
+end
+
 
 _T.build = function(self, ...)
     local ctx = self._state
@@ -353,9 +347,9 @@ _T.build = function(self, ...)
                 { 'SET',  fun.reduce(function(k, v, acc)
                     local where = ''
                     if type(k) == 'number' then 
-                        where = self._db.escape_identity(v)
+                        where = self.escape_identifier(v)
                     else
-                        where = self._db.escape_identity(k) .. '=' .. quote_var(v)
+                        where = self.escape_identifier(k) .. '=' .. self.escape_literal(v)
                     end
                     if not acc then return where end
                     return acc .. ', ' .. where
@@ -368,13 +362,14 @@ _T.build = function(self, ...)
             -- insert into `table` (f1, f2) values ( v1, v2)
             local keys = fun.table_keys(self._values)
             local vals = fun.map(function(v, k) 
-                return quote_var(self._values[v])
+                return self.escape_literal(self._values[v])
             end, keys)
 
             return table_concat(concat{
                 { 'INSERT INTO', self._from },
-                { '', '('.. self._db.escape_identity(table_concat(keys, ', ')) .. ')'},
-                { 'VALUES', '(' .. table_concat(vals, ', ') .. ')' }
+                { '', '('.. self.escape_identifier(table_concat(keys, ', ')) .. ')'},
+                { 'VALUES', '(' .. table_concat(vals, ', ') .. ')' },
+                { 'RETURNING', self._returning },
             }, ' ')
 
         end;
@@ -404,8 +399,14 @@ local function create_query(db)
         _order_by    = false,
         _set         = false,
         _values      = false,
+        _returning   = false,
+        _returning_as= false,
         _for_update  = false,
     }
+
+    qb.quote_sql_str = db.quote_sql_str
+    qb.escape_literal = db.escape_literal
+    qb.escape_identifier = db.escape_identifier
 
     local mt = {
         __index = _T,

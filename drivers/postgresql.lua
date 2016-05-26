@@ -1,22 +1,23 @@
-local mysql = require'resty.mysql'
+local pgmoon = require'pgmoon'
 local quote_sql_str = ngx.quote_sql_str
 local assert = assert
 local ipairs = ipairs
+local tostring = tostring
 local table_concat = table.concat
 local table_insert = table.insert
 local lpeg = require'lpeg'
-local quote_sql_str = ngx.quote_sql_str
+local ngx = ngx
+
 
 local open = function(conf)
     local connect = function()
-        local db, err = mysql:new()
-        assert(not err, "failed to create: ", err)
+        local db = pgmoon.new(conf)
+        assert(db, "failed to create pgmoon object")
 
-        local ok, err, errno, sqlstate = db:connect(conf)
-        assert(ok, "failed to connect: ", err, ": ", errno, " ", sqlstate)
+        assert(db:connect(), "failed connecting to db")
 
         if conf.charset then
-            if db:get_reused_times() == 0 then
+            if db.sock:getreusedtimes() == 0 then
                 db:query("SET NAMES " .. conf.charset)
             end
         end
@@ -36,21 +37,10 @@ local open = function(conf)
         local db = connect()
         local res, err, errno, sqlstate = db:query(query_str)
         if not res then
-            return false, table_concat({"bad result: " .. err, errno, sqlstate}, ', ') 
+            return nil, table_concat({"bad result: " .. err}, ', ') 
         end
 
-        if err == 'again' then res = { res } end
-        while err == "again" do
-            local tmp
-            tmp, err, errno, sqlstate = db:read_result()
-            if not tmp then
-                return false, table_concat({"bad result: " .. err, errno, sqlstate}, ', ') 
-            end
-
-            table_insert(res, tmp)
-        end
-
-        local ok, err = db:set_keepalive(10000, 50)
+        local ok, err = db:keepalive(10000, 50)
         if not ok then
             ngx.log(ngx.ERR, "failed to set keepalive: ", err)
         end
@@ -59,17 +49,21 @@ local open = function(conf)
     end
 
     local escape_identifier = function(id)
-        local repl = '`%1`'
+        local repl = '"%1"'
         local openp, endp = lpeg.P'[', lpeg.P']'
-        local quote_pat = openp * lpeg.C(( 1 - endp)^1) * endp
-        return lpeg.Cs((quote_pat/repl + 1)^0):match(id)
+        local quote_pat = openp * lpeg.C( ( 1 - endp ) ^ 1) * endp
+        return lpeg.Cs( ( quote_pat/repl + 1 ) ^ 0 ):match(id)
+    end
+    
+    local quote_sql_str = function(str)
+        return "'" .. tostring((str:gsub("'", "''"))) .. "'"
     end
 
     local function escape_literal(val)
         local typ = type(val)
 
         if typ == 'boolean' then
-            return val and 1 or 0
+            return val and "TRUE" or "FALSE"
         elseif typ == 'string' then
             return quote_sql_str(val)
         elseif typ == 'number' then
@@ -87,31 +81,36 @@ local open = function(conf)
     end
 
     local returning = function(column)
-        return false
+        return column
     end
 
     local get_schema = function(table_name)
 
         table_name = table_name:gsub('%[?([^%]]+)%]?', "'%1'")
+        local ok, columns = query([[
+            select column_name, data_type, character_maximum_length 
+            from INFORMATION_SCHEMA.COLUMNS where table_name = ]]
+            .. table_name ) 
 
-        local ok, res = query([[
-            select column_name, data_type, column_key, character_maximum_length 
-            from INFORMATION_SCHEMA.COLUMNS where table_name = ]] .. table_name) 
+        assert(ok, columns)
 
-        assert(ok, res)
+        say(columns)
 
+        local ok, pk = query([[ 
+            SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type
+            FROM   pg_index i
+            JOIN   pg_attribute a ON a.attrelid = i.indrelid
+            AND a.attnum = ANY(i.indkey)
+            WHERE  i.indrelid = ]].. table_name .. [[::regclass
+            AND    i.indisprimary;
+        ]])
 
-        say(res)
+        assert(ok, pk)
+        assert(#pk == 1, 'not implement for tables have multiple pk or none pk')
 
-        local fields = {  }
-        for _, f in ipairs(res) do
+        local fields = { __pk__ = pk[1].attname }
+        for _, f in ipairs(columns) do
             fields[f.column_name] = f
-            if f.column_key == 'PRI' then
-                if fields.__pk__ then
-                    error('not implement for tables have multiple pk')
-                end
-                fields.__pk__ = f.column_name
-            end
         end
 
         return fields
@@ -130,3 +129,4 @@ end
 
 
 return open
+

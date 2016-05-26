@@ -12,10 +12,9 @@ local function define_model(DB, Query, table_name)
     local _relations = {  }
 
     assert(type(table_name) == 'string', 'table name required')
-    table_name = DB.escape_identity(table_name)
 
     _M.table_name = function() 
-        return table_name 
+        return DB.escape_identifier(table_name)
     end
 
     -- User.has_one{ model = 'models.profile', as = 'profile', link = { 'user_id', 'id'} }
@@ -175,13 +174,13 @@ local function define_model(DB, Query, table_name)
 
                 self:trigger('BeforeSave')
 
-                local ok, res = query():insert():values(self.__attrs__)()
+                local ok, res = query():insert():values(self.__attrs__):returning(pk, 'insert_id')()
 
-                if ok then 
+                if ok and res.insert_id then 
                     self[pk] = res.insert_id
                     self:set_none_dirty()
                     self.__is_new__ = false
-                    return ok, res
+                    return ok, res.insert_id
                 else
                     return false, res
                 end
