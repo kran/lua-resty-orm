@@ -94,8 +94,6 @@ local open = function(conf)
 
         assert(ok, columns)
 
-        say(columns)
-
         local ok, pk = query([[ 
             SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type
             FROM   pg_index i

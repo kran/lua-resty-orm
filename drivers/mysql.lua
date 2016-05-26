@@ -100,9 +100,6 @@ local open = function(conf)
 
         assert(ok, res)
 
-
-        say(res)
-
         local fields = {  }
         for _, f in ipairs(res) do
             fields[f.column_name] = f
