@@ -118,6 +118,21 @@ Send query to database , returning (status, results)
 
 _WARNING:_ the table must have an auto increment column as its primary key
 
+METHODS:
+
+- *Model.new([attributes])*  create new instance  
+- *Model.query()*  same as orm.create\_query():from(Model.table_name())
+- *Model.find()*  same as query(), but return Model instance
+- *Model.find\_one(cond, ...)*  find one record by condition
+- *Model.find\_all(cond, ...)*  find all records by condition
+- *Model.update\_where(attributes, cond, ...)*  update records filter by condition  
+- *Model.delete\_where(cond, ...)*  delete records filter by condition  
+
+- *model:save()*  save the record, if pk is not nil then `update()` will be called, otherwise `insert()` will be called   
+- *model:load(attributes)*  load attributes to instance
+- *model:set\_dirty(attribute)*  make attribute dirty ( will be updated to database ) 
+- *model:is\_new()*  return if this instance is new or load from database
+
 This method define a model:
 
 ```
