@@ -116,6 +116,10 @@ local open = function(conf)
         return fields
     end
 
+    local limit_all = function()
+        return  'ALL'
+    end
+
     return { 
         query = query;
         get_schema = get_schema;
@@ -124,6 +128,7 @@ local open = function(conf)
         escape_literal = escape_literal;
         quote_sql_str = quote_sql_str;
         returning = returning;
+        limit_all = limit_all;
     }
 end
 

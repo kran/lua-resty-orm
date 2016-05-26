@@ -204,19 +204,19 @@ _T.order_by = function(self, ...)
 end
 
 _T.limit = function(self, arg)
-    if not tonumber(arg) then return self end
+    if not arg then return self end
 
     self._limit = arg
     return self
 end
 
 _T.offset = function(self, arg)
-    if not tonumber(arg) then return self end
+    if not arg then return self end
 
     self._offset = arg
 
     if self._offset and not self._limit then
-        self._limit = '18446744073709551615';
+        self._limit = self.limit_all()
     end
     return self
 end
@@ -407,6 +407,7 @@ local function create_query(db)
     qb.quote_sql_str = db.quote_sql_str
     qb.escape_literal = db.escape_literal
     qb.escape_identifier = db.escape_identifier
+    qb.limit_all = db.limit_all
 
     local mt = {
         __index = _T,
