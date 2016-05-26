@@ -4,7 +4,7 @@ Simple ORM for [openresty](http://openresty.org)
 
 #Status
 ----
-This library is not production ready.
+This library is **NOT** production ready.
 
 #Usage
 ----
