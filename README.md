@@ -12,14 +12,15 @@ This library is not production ready.
 ##connect to database:
 ```
 local orm = require'orm'.open{
-  driver = 'mysql',
+  driver = 'mysql', -- or 'postgresql'
   port = 3306,
   host = '127.0.0.1',
   user = 'root',
   password = '123456',
   database = 'test',
   charset = 'utf8mb4',
-  expires = 100  -- cache expires time period
+  expires = 100,  -- cache expires time period
+  debug = true -- log sql with ngx.log 
 }
 ```
 ##orm.expr(expression)
@@ -57,7 +58,7 @@ query:where('id in (?t)', {1, 2, 'a'}) --WHERE id in (1,2,'a')
 - `?e`  expression: MAX(id) | MIN(id) ...
 - `?d`  digit number, convert by tonumber
 - `?n`  NULL, false and nil wil be converted to 'NULL', orther 'NOT NULL'
-- `?s`  string, escape by ngx.quote_sql_str
+- `?s`  string, escape by ngx.quote\_sql\_str
 - `?`  any, convert by guessing the value type
 
 THESE modifiers can be used in where/having/join methods
@@ -74,9 +75,13 @@ JOIN `tbl` ON `cond` , `...` params will be used in `cond`
 
 Accept multiple `group by` | `order_by` expressions
 
-#####*limit([offset_num], limit_num):*
+#####*limit(limit_num):*
 
-`offset_num` is optional ( offset will have its own method in next commit )
+limit for select sql
+
+#####*offset(offset_num):*
+
+offset for select sql
 
 #####*as(alias):*
 
@@ -100,24 +105,31 @@ Set the query type, `tbl` param is optional, which can also be setted by `from` 
 
 #####*build():*
 
-Return sql string
+Return the sql string
 
-#####*exec(callback), one(callback), all(callback):*
+#####*exec():*
 
-Send query to database, `one`|`all` are only for `select` query.
-
-`callback` is the handler function called after db return results. It should accept two params (status, result)
+Send query to database , returning (status, results)
 
 
 ##orm.define_model(table_name):
 
 `define_model` accept table name as paramater and cache table fields in lrucache.
 
-This method define a model like this:
+This method define a model:
 
 ```
 local User = orm.define_model('tbl_user')
+
+-- build query from User
+User.query() -- eq to orm.create_query():from('tbl_user')
+
 -- fetch 
+
+-- SELECT * FROM tbl_user WHERE id > 1 LIMIT 10
+local ok, users = User.find():where('id > 1'):limit(10)() -- notice the ()
+
+-- SELECT * FROM tbl_user WHERE id > 10
 local ok, users = User.find_all('id > ?d', 10)
 if ok then
   for _, u in ipairs(users) do
@@ -125,16 +137,18 @@ if ok then
   end
 end
 
+-- SELECT * FROM tbl_user WHERE id = 10 LIMIT 1
 local ok, user = User.find_one('id = 10')
 if ok then
   user.name = 'new name'
   local ok, res = user:save()  -- update user
 end
 
--- update
+-- UPDATE tbl_user SET name='name updated' WHERE id > 10
 local attrs = { name = 'name updated' }
 User.update_where(attrs, 'id > ?', 10) 
--- delete 
+
+-- DELETE FROM tbl_user WHERE id = 10
 User.delete_where('id = ?', 10) --delete all by condition
 user:delete()  -- delete user instance
 
@@ -151,8 +165,6 @@ user:load(attrs) -- same as User.new(attrs)
 #TODO
 ----
 
-* [db] postgresql support
-* [query] offset method
 * [model] event (after\_find, before\_save & etc)
 * [model] attributes validation
 

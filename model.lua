@@ -68,6 +68,8 @@ local function define_model(DB, Query, table_name)
             return Query():from(table_name)
         end
 
+        Model.query = query
+
         Model.find = function(with)
             local q = query()
             getmetatable(q).__call = function(self)
