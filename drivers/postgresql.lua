@@ -31,7 +31,7 @@ local open = function(conf)
 
     local query = function(query_str)
         if conf.debug then
-            ngx.say(ngx.DEBUG, '[SQL] ' .. query_str)
+            ngx.log(ngx.DEBUG, '[SQL] ' .. query_str)
         end
 
         local db = connect()
