@@ -116,6 +116,8 @@ Send query to database , returning (status, results)
 
 `define_model` accept table name as paramater and cache table fields in lrucache.
 
+_WARNING:_ the table must have an auto increment column as its primary key
+
 This method define a model:
 
 ```

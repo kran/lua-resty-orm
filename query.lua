@@ -381,7 +381,7 @@ end
 
 local function create_query(db)
 
-    local qb = {
+    local query = {
         _db         = db,
         _state      = 'select',
         _type       = 'query',
@@ -404,10 +404,10 @@ local function create_query(db)
         _for_update  = false,
     }
 
-    qb.quote_sql_str = db.quote_sql_str
-    qb.escape_literal = db.escape_literal
-    qb.escape_identifier = db.escape_identifier
-    qb.limit_all = db.limit_all
+    query.quote_sql_str     = db.quote_sql_str
+    query.escape_literal    = db.escape_literal
+    query.escape_identifier = db.escape_identifier
+    query.limit_all         = db.limit_all
 
     local mt = {
         __index = _T,
@@ -422,7 +422,7 @@ local function create_query(db)
         end
     }
 
-    return setmetatable(qb, mt)
+    return setmetatable(query, mt)
 end
 
 
