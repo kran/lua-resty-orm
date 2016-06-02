@@ -33,11 +33,16 @@ local function open(conf)
         assert(ok, err)
 
         ngx_ctx[key] = db
+
+        local status, res
         while coroutine.status(thread) ~= 'dead' do
-            coroutine.resume(thread, db)
+            status, res = coroutine.resume(thread, db)
         end
 
-        db:set_keepalive()
+        db:set_keepalive(10000, 50)
+        ngx_ctx[key] = nil
+
+        return status, res
     end
 
     return {
