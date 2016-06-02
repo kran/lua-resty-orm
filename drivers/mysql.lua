@@ -117,7 +117,9 @@ local open = function(conf)
 
         local ok, res = query([[
             select column_name, data_type, column_key, character_maximum_length 
-            from INFORMATION_SCHEMA.COLUMNS where table_name = ]] .. table_name) 
+            from INFORMATION_SCHEMA.COLUMNS where table_name = ]] 
+            .. table_name 
+            .. ' AND table_schema = ' .. escape_literal(conf.database)) 
 
         assert(ok, res)
 
