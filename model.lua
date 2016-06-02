@@ -218,12 +218,12 @@ local function define_model(DB, Query, table_name)
             return self.__is_new__
         end
 
-        Model.new = function(data, not_dirty)
+        Model.new = function(data, from_db)
             local instance = { __attrs__ = {}, __dirty_attrs__ = {} , __is_new__ = true }
             setmetatable(instance, Model)
 
             instance:load(data)
-            if not_dirty then
+            if from_db then
                 instance:set_none_dirty()
                 -- while loading from db, records are not new
                 instance.__is_new__ = false

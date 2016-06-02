@@ -6,9 +6,10 @@ local table_concat = table.concat
 local table_insert = table.insert
 local lpeg = require'lpeg'
 local quote_sql_str = ngx.quote_sql_str
+local ngx_ctx = ngx.ctx
 
 local open = function(conf)
-    local connect = function()
+    local _connect = function()
         local db, err = mysql:new()
         assert(not err, "failed to create: ", err)
 
@@ -21,7 +22,24 @@ local open = function(conf)
             end
         end
 
-        return db
+        return  {
+            conn = db;
+            query = function(self, str) return db:query(str) end;
+            set_keepalive = function(self, ...) return db:set_keepalive(...) end;
+            start_transaction = function() return db:query('BEGIN') end;
+            commit = function() return db:query('COMMIT') end;
+            rollback = function() return db:query('ROLLBACK') end;
+        }
+    end
+
+    local function connect()
+        local key = "trans_" .. tostring(coroutine.running())
+        local conn = ngx_ctx[key]
+        if conn then
+            return true, conn
+        end
+
+        return false, _connect()
     end
 
     local config = function()
@@ -33,7 +51,8 @@ local open = function(conf)
             ngx.log(ngx.DEBUG, '[SQL] ' .. query_str)
         end
 
-        local db = connect()
+        local is_trans, db = connect()
+
         local res, err, errno, sqlstate = db:query(query_str)
         if not res then
             return false, table_concat({"bad result: " .. err, errno, sqlstate}, ', ') 
@@ -42,7 +61,7 @@ local open = function(conf)
         if err == 'again' then res = { res } end
         while err == "again" do
             local tmp
-            tmp, err, errno, sqlstate = db:read_result()
+            tmp, err, errno, sqlstate = db.conn:read_result()
             if not tmp then
                 return false, table_concat({"bad result: " .. err, errno, sqlstate}, ', ') 
             end
@@ -50,9 +69,11 @@ local open = function(conf)
             table_insert(res, tmp)
         end
 
-        local ok, err = db:set_keepalive(10000, 50)
-        if not ok then
-            ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+        if not is_trans then
+            local ok, err = db.conn:set_keepalive(10000, 50)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+            end
         end
 
         return true, res
@@ -119,6 +140,7 @@ local open = function(conf)
     end
 
     return { 
+        connect = connect;
         query = query;
         get_schema = get_schema;
         config = config;

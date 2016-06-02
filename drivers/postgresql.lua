@@ -10,7 +10,7 @@ local ngx = ngx
 
 
 local open = function(conf)
-    local connect = function()
+    local _connect = function()
         local db = pgmoon.new(conf)
         assert(db, "failed to create pgmoon object")
 
@@ -22,7 +22,24 @@ local open = function(conf)
             end
         end
 
-        return db
+        return  {
+            conn = db;
+            query = function(self, str) return db:query(str) end;
+            set_keepalive = function(self, ...) return db:keepalive(...) end;
+            start_transaction = function() return db:query('BEGIN') end;
+            commit = function() return db:query('COMMIT') end;
+            rollback = function() return db:query('ROLLBACK') end;
+        }
+    end
+
+    local function connect()
+        local key = "trans_" .. tostring(coroutine.running())
+        local conn = ngx_ctx[key]
+        if conn then
+            return true, conn
+        end
+
+        return false, _connect()
     end
 
     local config = function()
@@ -34,15 +51,17 @@ local open = function(conf)
             ngx.log(ngx.DEBUG, '[SQL] ' .. query_str)
         end
 
-        local db = connect()
-        local res, err, errno, sqlstate = db:query(query_str)
+        local in_trans, db = connect()
+        local res, err, errno, sqlstate = db.conn:query(query_str)
         if not res then
             return nil, table_concat({"bad result: " .. err}, ', ') 
         end
 
-        local ok, err = db:keepalive(10000, 50)
-        if not ok then
-            ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+        if not in_trans then
+            local ok, err = db.conn:keepalive(10000, 50)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+            end
         end
 
         return true, res
@@ -119,6 +138,7 @@ local open = function(conf)
     end
 
     return { 
+        connect = connect;
         query = query;
         get_schema = get_schema;
         config = config;

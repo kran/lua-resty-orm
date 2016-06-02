@@ -121,7 +121,7 @@ _WARNING:_ the table must have an auto increment column as its primary key
 METHODS:
 
 - *Model.new([attributes])*  create new instance  
-- *Model.query()*  same as orm.create\_query():from(Model.table_name())
+- *Model.query()*  same as orm.create\_query():from(Model.table\_name())
 - *Model.find()*  same as query(), but return Model instance
 - *Model.find\_one(cond, ...)*  find one record by condition
 - *Model.find\_all(cond, ...)*  find all records by condition
