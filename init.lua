@@ -50,7 +50,7 @@ local function open(conf)
         transaction  = transaction;
         create_query = create_query;
         define_model = define_model;
-        expr         = Query.expr;
+        expr         = Query.expr(conn);
     }
 end
 

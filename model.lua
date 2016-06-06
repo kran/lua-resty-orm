@@ -14,7 +14,7 @@ local function define_model(DB, Query, table_name)
     assert(type(table_name) == 'string', 'table name required')
 
     _M.table_name = function() 
-        return DB.escape_identifier(table_name)
+        return table_name:gsub('%[?.+%]?', '%1')
     end
 
     -- User.has_one{ model = 'models.profile', as = 'profile', link = { 'user_id', 'id'} }

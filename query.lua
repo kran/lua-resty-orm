@@ -19,25 +19,11 @@ local function isqb(tbl)
     return type(tbl) == 'table' and tbl._type == 'query'
 end
 
-local expr = function(str)
-    local expression = str
-    return setmetatable({ }, {
-        __tostring = function(tbl)
-            return expression
-        end;
-        __index = function(tbl, key)
-            if key == '_type' then 
-                return 'expr' 
-            end
-        end;
-        __newindex = function(tbl, key, val) 
-            error('no new value allowed')
-        end
-    })
-end
 
-local build_cond = function(self, condition, params)
+local build_cond = function(db, condition, params)
     if not params then params = {} end
+
+    condition = db.escape_identifier(condition)
 
     local replace_param = function(args)
         local counter = { 0 }
@@ -58,15 +44,15 @@ local build_cond = function(self, condition, params)
             arg = { arg }
         end
 
-        return self.escape_literal(arg)
+        return db.escape_literal(arg)
     end)
     local pbool = P'?b'/repl(function(arg) return arg and 1 or 0 end)
     local porig = P'?e'/repl(tostring)
     -- local pgrp  = P'?p'/repl(function(arg) return '('.. tostring(arg) ..')' end)
     local pnum  = P'?d'/repl(tonumber)
     local pnil  = P'?n'/repl(function(arg) return arg and 'NOT NULL' or 'NULL' end)
-    local pstr  = P'?s'/repl(self.quote_sql_str)
-    local pany  = P'?'/repl(self.escape_literal)
+    local pstr  = P'?s'/repl(db.quote_sql_str)
+    local pany  = P'?'/repl(db.escape_literal)
 
 
     local patt = Cs((porig + parr + pnum + pstr + pbool + pnil + pany + 1)^0)
@@ -77,6 +63,25 @@ local build_cond = function(self, condition, params)
 
 end
 
+local expr = function(db)
+    return function(str, ...)
+        local expression = str
+        local args = { ... }
+        return setmetatable({ }, {
+            __tostring = function(tbl)
+                return build_cond(db, expression, args)
+            end;
+            __index = function(tbl, key)
+                if key == '_type' then 
+                    return 'expr' 
+                end
+            end;
+            __newindex = function(tbl, key, val) 
+                error('no new value allowed')
+            end
+        })
+    end
+end
 
 _T.exec = function(self)
     local ok, res = self._db.query(self:build())
@@ -105,8 +110,7 @@ _T.from = function(self, tname, alias)
 end
 
 _T.build_where = function(self, cond, params) 
-    cond = self.escape_identifier(cond)
-    return build_cond(self, cond, params)
+    return build_cond(self._db, cond, params)
 end
 
 _T.select = function(self, fields)
@@ -154,7 +158,7 @@ end
 _T.join = function(self, tbl, mode, cond, param)
     if not cond then return end
 
-    local cond = build_cond(self, self.escape_identifier(cond), param)
+    local cond = build_cond(self._db, cond, param)
     if not self._join then self._join = '' end
     self._join =  table_concat({self._join, mode, 'JOIN', self.escape_identifier(tbl), 'ON', cond}, ' ')
     return self
