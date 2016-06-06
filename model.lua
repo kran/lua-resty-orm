@@ -70,6 +70,10 @@ local function define_model(DB, Query, table_name)
 
         Model.query = query
 
+        Model.primary_key = function()
+            return pk
+        end
+
         Model.find = function(with)
             local q = query()
             getmetatable(q).__call = function(self)
