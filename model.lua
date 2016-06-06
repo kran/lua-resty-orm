@@ -14,7 +14,7 @@ local function define_model(DB, Query, table_name)
     assert(type(table_name) == 'string', 'table name required')
 
     _M.table_name = function() 
-        return table_name:gsub('%[?.+%]?', '%1')
+        return table_name:gsub('%[?([^%]]+)%]?', '%1')
     end
 
     -- User.has_one{ model = 'models.profile', as = 'profile', link = { 'user_id', 'id'} }
@@ -43,6 +43,19 @@ local function define_model(DB, Query, table_name)
         assert(attrs.__pk__, 'primary key required')
         local pk = attrs.__pk__
         attrs.__pk__ = nil
+
+        local function quote_key(val) 
+            local typ = type(val)
+            if typ == 'string' then
+                return '['.. val .. ']'
+            elseif typ == 'table' then
+                return fun.kmap(function(k, v)
+                    return '[' .. k .. ']', v
+                end, val)
+            end
+
+            return error('can not quote keys')
+        end
 
         local function filter_attrs(params)
             return fun.kmap(function(k, v)
@@ -168,7 +181,7 @@ local function define_model(DB, Query, table_name)
                 local ok = false
                 local dirty_attrs, count = self:get_dirty_attrs()
                 if count > 0 then
-                    ok, res = query():update():where(pk .. ' = ?d ', self[pk]):set(dirty_attrs)()
+                    ok, res = query():update():where(quote_key(pk) .. ' = ?d ', self[pk]):set(quote_key(dirty_attrs))()
 
                     if ok then
                         self:set_none_dirty()
@@ -180,7 +193,8 @@ local function define_model(DB, Query, table_name)
 
                 self:trigger('BeforeSave')
 
-                local ok, res = query():insert():values(self.__attrs__):returning(pk, 'insert_id')()
+                local ok, res = query():insert():values(quote_key(self.__attrs__))
+                        :returning(quote_key(pk), 'insert_id')()  -- for postgresql
 
                 if ok and res.insert_id then 
                     self[pk] = res.insert_id
@@ -200,7 +214,7 @@ local function define_model(DB, Query, table_name)
         function Model:delete()
             assert(self[pk], 'primary key ['.. pk .. '] required')
 
-            return query():delete():where(pk .. '= ?d', self[pk])()
+            return query():delete():where(quote_key(pk) .. '= ?d', self[pk])()
         end
 
         function Model:load(data)
@@ -239,7 +253,7 @@ local function define_model(DB, Query, table_name)
         setmetatable(Model, nil)
     end
 
-    return setmetatable({}, {
+    return setmetatable(_M, {
         __index = function(self, key)
             _init_model(self)
             return rawget(self, key)
