@@ -113,7 +113,7 @@ _T.build_where = function(self, cond, params)
     return build_cond(self._db, cond, params)
 end
 
-_T.select = function(self, fields)
+_T.select = function(self, fields, ...)
     self._select = self.escape_identifier(fields)
     return self
 end
