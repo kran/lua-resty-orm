@@ -56,8 +56,7 @@ local build_cond = function(db, condition, params)
 
 
     local patt = Cs((porig + parr + pnum + pstr + pbool + pnil + pany + 1)^0)
-    local cond = '(' .. patt:match(condition) .. ')'
-
+    local cond = patt:match(condition)
 
     return cond
 
@@ -110,11 +109,11 @@ _T.from = function(self, tname, alias)
 end
 
 _T.build_where = function(self, cond, params) 
-    return build_cond(self._db, cond, params)
+    return '(' .. build_cond(self._db, cond, params) .. ')'
 end
 
 _T.select = function(self, fields, ...)
-    self._select = self.escape_identifier(fields)
+    self._select = build_cond(self._db, fields, { ... })
     return self
 end
 
@@ -158,7 +157,7 @@ end
 _T.join = function(self, tbl, mode, cond, param)
     if not cond then return end
 
-    local cond = build_cond(self._db, cond, param)
+    local cond = '(' .. build_cond(self._db, cond, param) .. ')'
     if not self._join then self._join = '' end
     self._join =  table_concat({self._join, mode, 'JOIN', self.escape_identifier(tbl), 'ON', cond}, ' ')
     return self
