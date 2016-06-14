@@ -72,7 +72,7 @@ local function define_model(DB, Query, table_name)
 
             return ok, fun.map(function(row)
                 local model = Model.new(row, true)
-                model:trigger('AfterFind')
+                model:trigger('after_find')
                 return model
             end, rows)
         end
@@ -156,6 +156,8 @@ local function define_model(DB, Query, table_name)
             if attrs[k] ~= nil then
                 self.__attrs__[k] = v
                 self.__dirty_attrs__[k] = true
+            else
+                rawset(self, k, v)
             end
         end
 
@@ -173,9 +175,12 @@ local function define_model(DB, Query, table_name)
         end
 
         function Model:save()
-            if self[pk] then -- update
 
-                self:trigger('BeforeSave')
+            if not self:trigger('before_save') then
+                return false, 'error on before save'
+            end
+
+            if self[pk] then -- update
 
                 local res = "no dirty attributes"
                 local ok = false
@@ -190,8 +195,6 @@ local function define_model(DB, Query, table_name)
 
                 return ok, res
             else -- insert
-
-                self:trigger('BeforeSave')
 
                 local ok, res = query():insert():values(quote_key(self.__attrs__))
                         :returning(quote_key(pk), 'insert_id')()  -- for postgresql
@@ -226,10 +229,11 @@ local function define_model(DB, Query, table_name)
         end
 
         function Model:trigger(event, ...)
-            local method = Model['on'..event]
+            local method = Model['on_'..event]
             if type(method) == 'function' then
                 return method(self, ...)
             end
+            return true
         end
 
         function Model:is_new()
