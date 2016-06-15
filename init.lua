@@ -22,8 +22,6 @@ local function open(conf)
     end
 
     local transaction = function(fn)
-        local thread = coroutine.create(fn)
-        local key = "trans_" .. tostring(thread)
         local in_trans, db = conn.connect()
         if in_trans then 
             return error("transaction can't be nested") 
@@ -31,6 +29,9 @@ local function open(conf)
 
         local ok, err = db:start_transaction()
         assert(ok, err)
+
+        local thread = coroutine.create(fn)
+        local key = "trans_" .. tostring(thread)
 
         ngx_ctx[key] = db
 

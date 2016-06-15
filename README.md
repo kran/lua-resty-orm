@@ -10,7 +10,7 @@ This library is **NOT** production ready.
 ----
 
 ##connect to database:
-```
+```lua
 local orm = require'orm'.open{
   driver = 'mysql', -- or 'postgresql'
   port = 3306,
@@ -19,49 +19,69 @@ local orm = require'orm'.open{
   password = '123456',
   database = 'test',
   charset = 'utf8mb4',
-  expires = 100,  -- cache expires time period
+  expires = 100,  -- cache expires time
   debug = true -- log sql with ngx.log 
 }
 ```
-##orm.expr(expression)
+##orm.expr(expression, ...)
 
-Create sql expression which will never be escaped.
+Create sql expression which `expression` and the rest params will be formated:
+
+```lua
+orm.expr('MAX([id])')  -- MAX(`id`)
+orm.expr('MAX(?d)', 10) -- MAX(10)
+```
+
+- `?t`  table  {1,2,'a'} => 1,2,'a'
+- `?b`  bool(0, 1), only false or nil will be converted to 0 for mysql, TRUE | FALSE in postgresql
+- `?e`  expression: MAX(id) | MIN(id) ...
+- `?d`  digit number, convert by tonumber
+- `?n`  NULL, false and nil wil be converted to 'NULL', orther 'NOT NULL'
+- `?s`  string, escaped by ngx.quote\_sql\_str
+- `?`   any, convert by guessing the value type
+
+*NOTICE: these modifiers can be used in where/having/join/select/expr methods*
+
+##orm.transaction(fn)
+
+run `fn` in transaction: 
+
+```lua
+orm.transaction(function(conn)
+    User.new{ name = 'mow' }:save()
+    -- conn:commit()
+    conn:rollback()
+end)
+```
+
+*Notice: transaction can't be nested now. This should be fixed in near future.*
 
 ##orm.create_query():
 
-This is the query builder, can now build select, update, insert, delete sql.
-```
+Return a query builder instance, can now build select, update, insert, delete sql.
+```lua
 local sql = orm.create_query():from('table_name'):where('[id] = ?d', 99):one()
 -- SELSECT * FROM table_name WHERE `id` = 99 LIMIT 1
 ```
 #####*from(table, alias):*
-```
+```lua
 query:from('table') -- SELECT * FROM table
 query:from('[table]') -- SELECT * FROM `table`
 query:from(another_query:from('user', 'u')) -- SELECT * FROM (SELECT * FROM user) AS u
 ```
-#####*select(fields):*
-```
-query:select('t1, t2, [t3]') -- SELECT t1, t2, `t3` ...
+#####*select(fields, ...):*
+```lua
+query:select('t1, t2, [t3], proc(?d)', 10) -- SELECT t1, t2, `t3`, proc(10) ...
 ```
 
 #####*where(cond, ...), and\_where(cond, ...), or_where(cond, ...):*
-```
+```lua
 query:where('id = ?d or [key] like ?s', '10', '"lua-%-orm"') -- WHERE id = 10 or `key` like '\"lua-%-orm\"'
 query:where('id in (?t)', 1) -- WHERE id in (1)
 query:where('id in (?t)', {1, 2, 'a'}) --WHERE id in (1,2,'a')
 -- ?t can be ? if don't know type of param
 
 ```
-- `?t`  table  {1,2,'a'} => 1,2,'a'
-- `?b`  bool(0, 1), only false or nil will be converted to 0
-- `?e`  expression: MAX(id) | MIN(id) ...
-- `?d`  digit number, convert by tonumber
-- `?n`  NULL, false and nil wil be converted to 'NULL', orther 'NOT NULL'
-- `?s`  string, escape by ngx.quote\_sql\_str
-- `?`  any, convert by guessing the value type
-
-THESE modifiers can be used in where/having/join methods
 
 #####*having(cond, ...), and_having(cond, ...), or_having(cond, ...):*
 
@@ -116,7 +136,7 @@ Send query to database , returning (status, results)
 
 `define_model` accept table name as paramater and cache table fields in lrucache.
 
-_WARNING:_ the table must have an auto increment column as its primary key
+*NOTICE: the table must have an auto increment column as its primary key*
 
 METHODS:
 
@@ -135,8 +155,22 @@ METHODS:
 
 This method define a model:
 
-```
+```lua
 local User = orm.define_model('tbl_user')
+
+-- events
+function User:on_before_save()
+    if self:is_new() then
+        self.create_at = os.time()
+    end
+    return true
+end
+
+function User:on_after_find()
+    if self.name = ngx.null then
+        self.name = 'UNNAMED'
+    end
+end
 
 -- build query from User
 User.query() -- eq to orm.create_query():from('tbl_user')
