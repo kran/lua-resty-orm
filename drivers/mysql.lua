@@ -1,6 +1,5 @@
 local mysql = require'resty.mysql'
 local fun = require'orm.func'
-local quote_sql_str = ngx.quote_sql_str
 local assert = assert
 local ipairs = ipairs
 local table_concat = table.concat
