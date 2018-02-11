@@ -34,7 +34,7 @@ local open = function(conf)
 
     local function connect()
         local key = "trans_" .. tostring(coroutine.running())
-        local conn = ngx_ctx[key]
+        local conn = ngx.ctx[key]
         if conn then
             return true, conn
         end

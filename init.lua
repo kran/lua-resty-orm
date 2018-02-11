@@ -2,7 +2,6 @@ local Query = require'orm.query'
 local Model = require'orm.model'
 local assert = assert
 local pcall = pcall
-local ngx_ctx = ngx.ctx
 
 local function open(conf)
     local driver = conf.driver
@@ -33,7 +32,7 @@ local function open(conf)
         local thread = coroutine.create(fn)
         local key = "trans_" .. tostring(thread)
 
-        ngx_ctx[key] = db
+        ngx.ctx[key] = db
 
         local status, res
         while coroutine.status(thread) ~= 'dead' do
@@ -41,7 +40,7 @@ local function open(conf)
         end
 
         db:set_keepalive(10000, 50)
-        ngx_ctx[key] = nil
+        ngx.ctx[key] = nil
 
         return status, res
     end

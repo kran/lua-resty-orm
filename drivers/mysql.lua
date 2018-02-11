@@ -6,7 +6,7 @@ local table_concat = table.concat
 local table_insert = table.insert
 local lpeg = require'lpeg'
 local quote_sql_str = ngx.quote_sql_str
-local ngx_ctx = ngx.ctx
+local ngx = ngx
 
 local open = function(conf)
     local _connect = function()
@@ -34,7 +34,7 @@ local open = function(conf)
 
     local function connect()
         local key = "trans_" .. tostring(coroutine.running())
-        local conn = ngx_ctx[key]
+        local conn = ngx.ctx[key]
         if conn then
             return true, conn
         end
