@@ -1,4 +1,3 @@
-local mysql = require'resty.mysql'
 local fun = require'orm.func'
 local assert = assert
 local ipairs = ipairs
@@ -10,6 +9,7 @@ local ngx_ctx = ngx.ctx
 
 local open = function(conf)
     local _connect = function()
+        local mysql = require'resty.mysql'
         local db, err = mysql:new()
         assert(not err, "failed to create: ", err)
 
