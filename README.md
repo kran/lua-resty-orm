@@ -50,6 +50,7 @@ placeholders can be used is sql, and will be converted to the right value for ev
 - `?n`  NULL, false and nil wil be converted to 'NULL', orther 'NOT NULL'
 - `?s`  string, escaped by ngx.quote\_sql\_str
 - `?`   any, convert by guessing the value type
+```
 
 ## orm.transaction(fn)
 
