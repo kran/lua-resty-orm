@@ -1,5 +1,4 @@
-local Query = require'orm.query'
-local Model = require'orm.model'
+local Mapper = require'orm.mapper'
 local assert = assert
 local pcall = pcall
 
@@ -11,14 +10,6 @@ local function open(conf)
     assert(ok, 'no driver for ' .. driver)
 
     local conn = db(conf)
-
-    local create_query = function() 
-        return Query.create(conn) 
-    end
-
-    local define_model = function(table_name) 
-        return Model(conn, create_query, table_name) 
-    end
 
     local transaction = function(fn)
         local in_trans, db = conn.connect()
@@ -48,9 +39,7 @@ local function open(conf)
     return {
         db           = conn;
         transaction  = transaction;
-        create_query = create_query;
-        define_model = define_model;
-        expr         = Query.expr(conn);
+        mapper       = Mapper(conn);
     }
 end
 

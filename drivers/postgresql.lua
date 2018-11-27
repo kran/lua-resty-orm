@@ -87,7 +87,7 @@ local open = function(conf)
             return quote_sql_str(val)
         elseif typ == 'number' then
             return val
-        elseif typ == 'nil' then
+        elseif typ == 'nil' or typ == 'null' then
             return "NULL"
         elseif typ == 'table' then
             if val._type then 
@@ -97,10 +97,6 @@ local open = function(conf)
         else
             return tostring(val)
         end
-    end
-
-    local returning = function(column)
-        return column
     end
 
     local get_schema = function(table_name)
@@ -133,9 +129,6 @@ local open = function(conf)
         return fields
     end
 
-    local limit_all = function()
-        return  'ALL'
-    end
 
     return { 
         connect = connect;
@@ -145,8 +138,6 @@ local open = function(conf)
         escape_identifier = escape_identifier;
         escape_literal = escape_literal;
         quote_sql_str = quote_sql_str;
-        returning = returning;
-        limit_all = limit_all;
     }
 end
 

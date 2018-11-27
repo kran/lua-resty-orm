@@ -1,4 +1,3 @@
-local fun = require'orm.func'
 local assert = assert
 local ipairs = ipairs
 local table_concat = table.concat
@@ -6,6 +5,7 @@ local table_insert = table.insert
 local lpeg = require'lpeg'
 local quote_sql_str = ngx.quote_sql_str
 local ngx = ngx
+local setmetatable = setmetatable
 
 local open = function(conf)
     local _connect = function()
@@ -14,7 +14,7 @@ local open = function(conf)
         assert(not err, "failed to create: ", err)
 
         local ok, err, errno, sqlstate = db:connect(conf)
-        assert(ok, "failed to connect: ", err, ": ", errno, " ", sqlstate)
+        assert(ok, table_concat{"failed to connect: ",  err})
 
         if conf.charset then
             if db:get_reused_times() == 0 then
@@ -95,26 +95,22 @@ local open = function(conf)
             return quote_sql_str(val)
         elseif typ == 'number' then
             return val
-        elseif typ == 'nil' then
+        elseif typ == 'nil' or typ == 'null' then
             return "NULL"
         elseif typ == 'table' then
-            if val._type then 
-                return tostring(val) 
+            local res = { }
+            for k, v in pairs(val) do
+                table_insert(res, escape_literal(v));
             end
-            return table_concat(fun.map(escape_literal, val), ', ')
+            return table_concat(res, ', ')
         else
             return tostring(val)
         end
     end
 
-    local returning = function(column)
-        return false
-    end
-
     local get_schema = function(table_name)
 
         table_name = table_name:gsub('%[?([^%]]+)%]?', "'%1'")
-
         local ok, res = query([[
             select column_name, data_type, column_key, character_maximum_length 
             from INFORMATION_SCHEMA.COLUMNS where table_name = ]] 
@@ -123,22 +119,15 @@ local open = function(conf)
 
         assert(ok, res)
 
-        local fields = {  }
+        local dt = { attrs = {}, pk = {} }
         for _, f in ipairs(res) do
-            fields[f.column_name] = f
+            dt.attrs[f.column_name] = f
             if f.column_key == 'PRI' then
-                if fields.__pk__ then
-                    error('not implement for tables have multiple pk')
-                end
-                fields.__pk__ = f.column_name
+                table_insert(dt.pk, f.column_name)
             end
         end
 
-        return fields
-    end
-
-    local limit_all = function()
-        return  '18446744073709551615'
+        return dt
     end
 
     return { 
@@ -149,8 +138,6 @@ local open = function(conf)
         escape_identifier = escape_identifier;
         escape_literal = escape_literal;
         quote_sql_str = quote_sql_str;
-        returning = returning;
-        limit_all = limit_all;
     }
 end
 
