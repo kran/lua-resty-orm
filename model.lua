@@ -19,21 +19,19 @@ local call_hook = function(model, hook_name, ...)
     return ...
 end
 
-_W.get = function(self, key, cast) 
+_W.get = function(self, key)  --> always db value
     local val = rawget(self, key)
-
-    if not cast then return val end
 
     local fd = self.get_model().table.fields[key]
     if not fd then return val end
 
-    local cast_out = fd.cast and fd.cast[2]
-    if type(cast_out) ~= 'function' then 
+    local cast_in = fd.cast and fd.cast[1]
+    if type(cast_in) ~= 'function' then 
         return val
     end
 
-    return fd.cast(val)
-end;
+    return cast_in(val)
+end
 
 _W.set = function(self, key, val)
     rawset(self, key, val)
@@ -46,7 +44,7 @@ _W.set = function(self, key, val)
         end
         self.get_dirty()[key] = val
     end
-end;
+end
 
 _W.delete = function(self)
     local table = self.get_model().table
