@@ -95,10 +95,10 @@ _M.quote = function(self, sql, params)
 
         return self.driver.escape_literal(arg)
     end)
-    local pjson = P'?j'/R(function(arg)
-        assert(type(arg) == 'table', 'parameter must be table type')
-        return self.driver.quote_sql_str(cjson.encode(arg))
-    end)
+    -- local pjson = P'?j'/R(function(arg)
+    --     assert(type(arg) == 'table', 'parameter must be table type')
+    --     return self.driver.quote_sql_str(cjson.encode(arg))
+    -- end)
     local pbool = P'?b'/R(function(arg) return arg and 1 or 0 end)
     local porig = P'?e'/R(tostring)
     local pnum  = P'?d'/R(tonumber)
@@ -111,7 +111,7 @@ _M.quote = function(self, sql, params)
     local pstr  = P'?s'/R(self.driver.quote_sql_str)
     local pany  = P'?'/R(self.driver.escape_literal)
 
-    local patt = Cs((pjson + porig + parr + pnum + pstr + pbool + pnil + pany + 1)^0)
+    local patt = Cs((porig + parr + pnum + pstr + pbool + pnil + pany + 1)^0)
     return patt:match(sql)
 end
 

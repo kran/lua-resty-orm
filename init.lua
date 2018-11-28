@@ -1,4 +1,5 @@
 local Mapper = require'orm.mapper'
+local Model = require'orm.model'
 local assert = assert
 local pcall = pcall
 
@@ -36,10 +37,14 @@ local function open(conf)
         return status, res
     end
 
+    local mapper = Mapper(conn)
+    local define_table = Model(mapper)
+
     return {
         db           = conn;
         transaction  = transaction;
-        mapper       = Mapper(conn);
+        mapper       = mapper;
+        define_table = define_table;
     }
 end
 

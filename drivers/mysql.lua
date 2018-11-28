@@ -79,8 +79,15 @@ local open = function(conf)
         return true, res
     end
 
+    local repl = function(cap)
+        if cap:match('`') then
+            error("bad identity: " .. cap)
+        end
+        return string.format("`%s`", cap) 
+    end
+
     local escape_identifier = function(id)
-        local repl = '`%1`'
+        -- local repl = '`%1`'
         local openp, endp = lpeg.P'[', lpeg.P']'
         local quote_pat = openp * lpeg.C(( 1 - endp)^1) * endp
         return lpeg.Cs((quote_pat/repl + 1)^0):match(id)

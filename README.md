@@ -42,7 +42,6 @@ end
 placeholders can be used is sql, and will be converted to the right value for every supported driver or error on failed.
 
 ```
-- `?j`  JSON  `cjson.encode` and ngx.quote_sql_str used
 - `?t`  table  {1,2,'a'} => 1,2,'a'
 - `?b`  bool(0, 1), only false or nil will be converted to 0 for mysql, TRUE | FALSE in postgresql
 - `?e`  expression: MAX(id) | MIN(id) ...
