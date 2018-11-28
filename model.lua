@@ -27,7 +27,8 @@ _W.get = function(self, key, cast)
     local fd = self.get_model().table.fields[key]
     if not fd then return val end
 
-    if type(fd.cast) ~= 'function' then 
+    local cast_out = fd.cast and fd.cast[2]
+    if type(cast_out) ~= 'function' then 
         return val
     end
 
@@ -36,7 +37,13 @@ end;
 
 _W.set = function(self, key, val)
     rawset(self, key, val)
-    if self.get_model().table.fields[key] then
+
+    local fd = self.get_model().table.fields[key]
+    if fd then
+        local cast_in = fd.cast and fd.cast[1]
+        if type(cast_in) == 'function' then
+            val = cast_in(val)
+        end
         self.get_dirty()[key] = val
     end
 end;
@@ -92,27 +99,34 @@ _W.save = function(self)
     end
 end
 
-_R.load = function(self, tbl)
-    local record = self:init_loaded_record({})
+_W.load = function(self, tbl)
     local fields = self.table.fields
     for k, v in pairs(tbl) do
         if fields[k] then 
-            record:set(k, v)        
+            self:set(k, v)
         end
     end
-    return record
 end
 
-_R.init_loaded_record = function(self, record) 
+-- `tbl` changed
+local as_record = function(model, tbl) 
     local dirty = {}
     local mt = setmetatable({
-        get_model = function() return self  end;
+        get_model = function() return mode  end;
         get_dirty = function() return dirty end;
     }, { __index = _W })
     mt.__index = mt
 
-    return setmetatable(record, mt)
+    return setmetatable(tbl, mt)
 end
+
+-- never modify the `tbl` argument
+_R.create_record = function(self, tbl)
+    local record = as_record(self, {})
+    record:load(tbl)
+    return record
+end
+
 
 _R.prepare = function(self, sql, ...)
     return self.table.mapper:prepare(sql, ...)
@@ -125,7 +139,7 @@ _R.find_all = function(self, sql, ...)
     if err then return rows, err end
 
     for _, v in ipairs(rows) do
-        self:init_loaded_record(v)
+        as_record(self, v)
         call_hook(self, 'after_find', v)
     end
 
@@ -143,9 +157,8 @@ _R.find_one = function(self, sql, ...)
     return rows[1], nil
 end
 
-_R.collect = function(self, sel, where, ...)
-    where = where or "1 = 1"
-    local fsql = sprintf("SELECT %s FROM [%s] WHERE %s", sel, self.table.table_name, where)
+_R.collect = function(self, sel, ...)
+    local fsql = sprintf("SELECT %s FROM [%s]", sel, self.table.table_name)
     return self:prepare(fsql, ...)
 end
 
