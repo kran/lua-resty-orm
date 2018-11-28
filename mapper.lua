@@ -20,7 +20,7 @@ local _P = setmetatable({ __type = 'P' }, {
 local sql_error = function(err)
     return setmetatable({ err = err }, {
         __index = function(self) return self end;
-        __call  = function(self) return self end;
+        __call  = function(self) return self, true end;
     })
 end
 
