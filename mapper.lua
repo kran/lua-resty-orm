@@ -10,6 +10,7 @@ local tonumber     = tonumber
 local table_insert = table.insert
 local table_concat = table.concat
 local ngx_null     = ngx.null
+local sprintf = string.format
 
 local _M = {  }
 local _P = setmetatable({ __type = 'P' }, { 
@@ -20,7 +21,7 @@ local _P = setmetatable({ __type = 'P' }, {
 local sql_error = function(err)
     return setmetatable({ err = err }, {
         __index = function(self) return self end;
-        __call  = function(self) return self, true end;
+        __call  = function(self) return self, true end; --> res, err
     })
 end
 
@@ -32,6 +33,44 @@ _P.append = function(self, sql, ...)
         table_insert(self.sql, res)
         return self, nil
     end
+end
+
+_P.append_named = function(self, name, sql, ...)
+    local self, err = self:append(sql, ...)
+    if err then return self, true end
+
+    if self.names[name] then
+        return sql_error(sprintf('name "%s" already exists', name)), true
+    end
+
+    self.names[name] = #self.sql
+
+    return self, nil
+end
+
+_P.get_named_part = function(self, name)
+    local index = self.names[name]
+    if not index then 
+        return sql_error(sprintf('name "%s" not found', name)), true
+    end
+
+    return self.sql[index], nil
+end
+
+_P.replace = function(self, name, sql, ...)
+    local index = self.names[name]
+    if not index then 
+        return sql_error(sprintf('name "%s" not found', name)), true
+    end
+
+    local ok, res = pcall(self.quote, self, sql, {...})
+    if not ok then
+        return sql_error(res), true
+    end
+
+    self.sql[index] = res
+
+    return self, nil
 end
 
 _P.scalar = function(self)
@@ -88,7 +127,7 @@ _M.quote = function(self, sql, params)
 
     local R = repfunc(params)
 
-    local parr  = P'?t'/R(function(arg)
+    local pt  = P'?t'/R(function(arg)
         if type(arg) ~= 'table' then
             arg = { arg }
         end
@@ -99,19 +138,22 @@ _M.quote = function(self, sql, params)
     --     assert(type(arg) == 'table', 'parameter must be table type')
     --     return self.driver.quote_sql_str(cjson.encode(arg))
     -- end)
-    local pbool = P'?b'/R(function(arg) return arg and 1 or 0 end)
-    local porig = P'?e'/R(tostring)
-    local pnum  = P'?d'/R(tonumber)
-    local pnil  = P'?n'/R(function(arg) 
+    local pb = P'?b'/R(function(arg) return arg and 1 or 0 end)
+    local pe = P'?e'/R(tostring)
+    local pd  = P'?d'/R(tonumber)
+    local pi  = P'?i'/R(function(arg) 
+        return self:quote_identity(sprintf("[%s]", arg))
+    end)
+    local pn  = P'?n'/R(function(arg) 
         if arg == ngx_null then
             return 'NULL'
         end
         return arg and 'NOT NULL' or 'NULL' 
     end)
-    local pstr  = P'?s'/R(self.driver.quote_sql_str)
-    local pany  = P'?'/R(self.driver.escape_literal)
+    local ps  = P'?s'/R(self.driver.quote_sql_str)
+    local pa  = P'?'/R(self.driver.escape_literal)
 
-    local patt = Cs((porig + parr + pnum + pstr + pbool + pnil + pany + 1)^0)
+    local patt = Cs((pb + pe + pt + pd + pi + pn + ps + pa + 1)^0)
     return patt:match(sql)
 end
 
@@ -125,7 +167,7 @@ _M.prepare = function(self, sql, ...)
     if not ok then 
         return sql_error(res), true
     else
-        return setmetatable({ sql = { res }, driver = self.driver }, { __index = _P }), nil
+        return setmetatable({ sql = { res }, names = {}, driver = self.driver }, { __index = _P }), nil
     end
 end
 

@@ -19,23 +19,28 @@ local call_hook = function(model, hook_name, ...)
     return ...
 end
 
-_W.get = function(self, key)  --> always db value
+_W.to_array = function(self)
+    local result = {}
+    for k, v in pairs(self) do
+
+    end
+end
+
+_W.get = function(self, key)
     local val = rawget(self, key)
 
     local fd = self.get_model().table.fields[key]
     if not fd then return val end
 
-    local cast_in = fd.cast and fd.cast[1]
-    if type(cast_in) ~= 'function' then 
+    local cast_out = fd.cast and fd.cast[2]
+    if type(cast_out) ~= 'function' then 
         return val
     end
 
-    return cast_in(val)
+    return cast_out(val)
 end
 
 _W.set = function(self, key, val)
-    rawset(self, key, val)
-
     local fd = self.get_model().table.fields[key]
     if fd then
         local cast_in = fd.cast and fd.cast[1]
@@ -44,6 +49,7 @@ _W.set = function(self, key, val)
         end
         self.get_dirty()[key] = val
     end
+    rawset(self, key, val)
 end
 
 _W.delete = function(self)
@@ -110,7 +116,7 @@ end
 local as_record = function(model, tbl) 
     local dirty = {}
     local mt = setmetatable({
-        get_model = function() return mode  end;
+        get_model = function() return model  end;
         get_dirty = function() return dirty end;
     }, { __index = _W })
     mt.__index = mt

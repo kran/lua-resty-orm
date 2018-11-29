@@ -89,7 +89,7 @@ local open = function(conf)
     local escape_identifier = function(id)
         -- local repl = '`%1`'
         local openp, endp = lpeg.P'[', lpeg.P']'
-        local quote_pat = openp * lpeg.C(( 1 - endp)^1) * endp
+        local quote_pat = openp^1 * lpeg.C(( 1 - openp - endp)^1) * endp^1
         return lpeg.Cs((quote_pat/repl + 1)^0):match(id)
     end
 
