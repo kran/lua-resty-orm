@@ -1,5 +1,5 @@
 local pgmoon = require'pgmoon'
-local quote_sql_str = ngx.quote_sql_str
+local quote_sql_str = ndk.set_var.set_quote_pgsql_str
 local assert = assert
 local ipairs = ipairs
 local tostring = tostring
@@ -67,17 +67,24 @@ local open = function(conf)
         return true, res
     end
 
-    local escape_identifier = function(id)
-        local repl = '"%1"'
-        local openp, endp = lpeg.P'[', lpeg.P']'
-        local quote_pat = openp * lpeg.C( ( 1 - endp ) ^ 1) * endp
-        return lpeg.Cs( ( quote_pat/repl + 1 ) ^ 0 ):match(id)
-    end
-    
-    local quote_sql_str = function(str)
-        return "'" .. tostring((str:gsub("'", "''"))) .. "'"
+    local returning = function(ret)
+        return ret
     end
 
+    local repl = function(cap)
+        if cap:match('"') then
+            error("bad identity: " .. cap)
+        end
+        return string.format('"%s"', cap) 
+    end
+
+    local escape_identifier = function(id)
+        -- local repl = '`%1`'
+        local openp, endp = lpeg.P'[', lpeg.P']'
+        local quote_pat = openp^1 * lpeg.C(( 1 - openp - endp)^1) * endp^1
+        return lpeg.Cs((quote_pat/repl + 1)^0):match(id)
+    end
+    
     local function escape_literal(val)
         local typ = type(val)
 
@@ -138,6 +145,7 @@ local open = function(conf)
         escape_identifier = escape_identifier;
         escape_literal = escape_literal;
         quote_sql_str = quote_sql_str;
+        returning = returning;
     }
 end
 

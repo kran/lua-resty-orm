@@ -3,11 +3,10 @@
 ----
 Simple ~~ORM~~ for [openresty](http://openresty.org) 
 
-2018/11/27 - ORM is the hell, let SQL rocks!
-
 # Status
 ----
 This library is **NOT** production ready.
+PostgreSql driver wasn't tested.
 
 # Usage
 ----
@@ -43,6 +42,7 @@ placeholders can be used is sql, and will be converted to the right value for ev
 
 ```
 - `?t`  table  {1,2,'a'} => 1,2,'a'
+- `?i`  
 - `?b`  bool(0, 1), only false or nil will be converted to 0 for mysql, TRUE | FALSE in postgresql
 - `?e`  expression: MAX(id) | MIN(id) ...
 - `?d`  digit number, convert by tonumber

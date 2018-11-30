@@ -115,6 +115,10 @@ local open = function(conf)
         end
     end
 
+    local returning = function(ret)
+        return ''
+    end
+
     local get_schema = function(table_name)
 
         table_name = table_name:gsub('%[?([^%]]+)%]?', "'%1'")
@@ -145,6 +149,7 @@ local open = function(conf)
         escape_identifier = escape_identifier;
         escape_literal = escape_literal;
         quote_sql_str = quote_sql_str;
+        returning = returning;
     }
 end
 

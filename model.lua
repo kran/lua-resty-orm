@@ -8,8 +8,8 @@ local sprintf = string.format
 local table_concat = table.concat
 local table_insert = table.insert
 
-local _R = {}
-local _W = {}
+local _R = {}  -- read from db
+local _W = {}  -- write to db
 
 local call_hook = function(model, hook_name, ...)
     local hook = model.table.hooks[hook_name]
@@ -19,11 +19,13 @@ local call_hook = function(model, hook_name, ...)
     return ...
 end
 
-_W.to_array = function(self)
+_W.casted = function(self)
     local result = {}
-    for k, v in pairs(self) do
-
+    for k, _ in pairs(self) do
+        result[k] = self:get(k)
     end
+
+    return result
 end
 
 _W.get = function(self, key)
@@ -54,57 +56,85 @@ end
 
 _W.delete = function(self)
     local table = self.get_model().table
+
     if not self[table.pk] then
-        return { err = 'primary key required' }, true
+        return table.mapper.sql_error('primary key required'), true
     end
 
     local sql = sprintf("DELETE FROM [%s] WHERE [%s] = %s",
         table.table_name, table.pk, table.fields[table.pk].fmt);
+
+    self:clear_dirty()
 
     return self.get_model():prepare(sql, self[table.pk]):query()
 end
 
 _W.save = function(self)
     local table = self.get_model().table
+    local params = {}
+    local sql;
+    local res
+    local err
+
     if self[table.pk] then  -- UPDATE
+        local err_msg, has_err = call_hook(self.get_model(), 'before_save', self, 'update')
+        if has_err then
+            return table.mapper.sql_error(err_msg), true
+        end
+
         local parts = {}
-        local params = {}
         for k, v in pairs(self.get_dirty()) do
             table_insert(parts, sprintf("[%s] = %s", k, table.fields[k].fmt))
             table_insert(params, v)
         end
         if #parts == 0 then 
-            return self, nil
+            return table.mapper.sql_error('no field to update'), true
         end
 
         table_insert(params, self[table.pk])
 
-        local sql = sprintf("UPDATE [%s] SET %s WHERE [%s] = %s", 
+        sql = sprintf("UPDATE [%s] SET %s WHERE [%s] = %s", 
                 table.table_name, table_concat(parts, ', '), table.pk, table.fields[table.pk].fmt)
 
-        return self.get_model():prepare(sql, unpack(params)):query()
+        res, err = self.get_model():prepare(sql, unpack(params)):query()
     else  -- INSERT
+        local err_msg, has_err = call_hook(self.get_model(), 'before_save', self, 'insert')
+        if has_err then
+            return table.mapper.sql_error(err_msg), true
+        end
         local fields = {}
         local phs = {}
-        local params = {}
         for k, v in pairs(self.get_dirty()) do
             table_insert(fields, sprintf("[%s]", k))
             table_insert(phs, table.fields[k].fmt)
             table_insert(params, v)
         end
         if #fields == 0 then 
-            return self, nil
+            return table.mapper.sql_error('no field to save'), true
         end
 
-        local sql = sprintf("INSERT INTO [%s] (%s) VALUES (%s)", 
-                table.table_name, table_concat(fields, ', '), table_concat(phs, ', '))
+        local returning = table.mapper.driver.returning(sprintf('[%s] AS [%s]', table.pk, 'insert_id'))
 
-        return self.get_model():prepare(sql, unpack(params)):query()
+        sql = sprintf("INSERT INTO [%s] (%s) VALUES (%s) %s", 
+                table.table_name, table_concat(fields, ', '), table_concat(phs, ', '), returning)
+
+        res, err = self.get_model():prepare(sql, unpack(params)):query()
+        if not err then
+            self[table.pk] = res.insert_id
+        end
+    end
+
+
+    if err then 
+        return res, true 
+    else
+        self:clear_dirty()
+        return res, nil
     end
 end
 
 _W.load = function(self, tbl)
-    local fields = self.table.fields
+    local fields = self.get_model().table.fields
     for k, v in pairs(tbl) do
         if fields[k] then 
             self:set(k, v)
@@ -118,10 +148,24 @@ local as_record = function(model, tbl)
     local mt = setmetatable({
         get_model = function() return model  end;
         get_dirty = function() return dirty end;
+        clear_dirty = function() dirty = {} end;
     }, { __index = _W })
     mt.__index = mt
 
     return setmetatable(tbl, mt)
+end
+
+local as_collection = function(resultset)  -- FIXME as iterator
+    local casted = function() 
+        local res = {}
+        for _, v in ipairs(resultset) do
+            table_insert(res, v:casted())
+        end
+        return res
+    end
+    return setmetatable(resultset, {
+        __index = { casted = casted }
+    })
 end
 
 -- never modify the `tbl` argument
@@ -147,7 +191,7 @@ _R.find_all = function(self, sql, ...)
         call_hook(self, 'after_find', v)
     end
 
-    return rows, nil
+    return as_collection(rows), nil
 end
 
 _R.find_one = function(self, sql, ...)
@@ -192,11 +236,7 @@ local model = function(table)
 end
 
 local define_table = function(mapper)
-    local hooks = {
-        after_find = function(this, row) 
-            return row 
-        end;
-    }
+    local hooks = { }
     return function(table_name, pk, fields)
         return { 
             model      = model;
@@ -205,6 +245,9 @@ local define_table = function(mapper)
             mapper     = mapper;
             hooks      = hooks;
             fields     = fields;
+            get_schema = function()
+                return mapper.driver.get_schema(table_name)
+            end 
         }
     end
 end

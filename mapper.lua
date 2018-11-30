@@ -19,7 +19,11 @@ local _P = setmetatable({ __type = 'P' }, {
 })
 
 local sql_error = function(err)
-    return setmetatable({ err = err }, {
+    local striped = false
+    if type(err) == 'string' then
+        striped = err:match("([^\\/]+%.lua:%d+:.+)$")  -- trim application path
+    end
+    return setmetatable({ err =  striped or err}, {
         __index = function(self) return self end;
         __call  = function(self) return self, true end; --> res, err
     })
@@ -48,7 +52,7 @@ _P.append_named = function(self, name, sql, ...)
     return self, nil
 end
 
-_P.get_named_part = function(self, name)
+_P.get_named = function(self, name)
     local index = self.names[name]
     if not index then 
         return sql_error(sprintf('name "%s" not found', name)), true
@@ -81,8 +85,8 @@ _P.scalar = function(self)
     return val, nil
 end
 
-_P.first = function(self, dao)
-    local res, err = self:query(dao)
+_P.first = function(self)
+    local res, err = self:query()
     if err then 
         return res, err
     else
@@ -90,9 +94,14 @@ _P.first = function(self, dao)
     end
 end
 
-_P.query = function(self, dao)
-    local ok, res = self.driver.query(self:tosql())
+_P.query = function(self)
+    local ok, stat, res = pcall(self.driver.query, self:tosql())
+    -- print(ok, stat, res)
     if not ok then
+        return sql_error(stat), true
+    end
+
+    if not stat then 
         return sql_error(res), true
     end
 
@@ -108,6 +117,8 @@ _M.quote_identity = function(self, str)
 end
 
 _M.quote = function(self, sql, params)
+    assert(sql, 'sql must not be nil')
+
     local sql = self:quote_identity(sql)
     assert(type(params) == 'table', 'params must be array')
     local params_count = #params
@@ -172,6 +183,6 @@ _M.prepare = function(self, sql, ...)
 end
 
 return function(driver)
-    return setmetatable({ driver = driver }, { __index = _M })
+    return setmetatable({ driver = driver, sql_error = sql_error }, { __index = _M })
 end
 
