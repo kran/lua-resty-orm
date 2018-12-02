@@ -40,14 +40,18 @@ _P.append = function(self, sql, ...)
 end
 
 _P.append_named = function(self, name, sql, ...)
-    local self, err = self:append(sql, ...)
-    if err then return self, true end
-
-    if self.names[name] then
-        return sql_error(sprintf('name "%s" already exists', name)), true
+    local ok, res = pcall(self.quote, self, sql, {...})
+    if not ok then 
+        return sql_error(res), true
     end
 
-    self.names[name] = #self.sql
+    if self.names[name] then
+        local index = self.names[name] 
+        self.sql[index] = sprintf('%s %s', self:get_named(name), res)
+    else
+        table_insert(self.sql, res)
+        self.names[name] = #self.sql
+    end
 
     return self, nil
 end
@@ -61,7 +65,7 @@ _P.get_named = function(self, name)
     return self.sql[index], nil
 end
 
-_P.replace = function(self, name, sql, ...)
+_P.set_named = function(self, name, sql, ...)
     local index = self.names[name]
     if not index then 
         return sql_error(sprintf('name "%s" not found', name)), true

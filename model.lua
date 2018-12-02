@@ -3,6 +3,8 @@ local assert = assert
 local type = type
 local ipairs = ipairs
 local pairs = pairs
+local rawget = rawget
+local rawset = rawset
 local unpack = unpack
 local sprintf = string.format
 local table_concat = table.concat
@@ -18,6 +20,33 @@ local call_hook = function(model, hook_name, ...)
     end
     return ...
 end
+
+-- `tbl` changed
+local as_record = function(model, tbl) 
+    local dirty = {}
+    local mt = setmetatable({
+        get_model = function() return model  end;
+        get_dirty = function() return dirty end;
+        clear_dirty = function() dirty = {} end;
+    }, { __index = _W })
+    mt.__index = mt
+
+    return setmetatable(tbl, mt)
+end
+
+local as_collection = function(resultset)  -- FIXME as iterator
+    local casted = function() 
+        local res = {}
+        for _, v in ipairs(resultset) do
+            table_insert(res, v:casted())
+        end
+        return res
+    end
+    return setmetatable(resultset, {
+        __index = { casted = casted }
+    })
+end
+
 
 _W.casted = function(self)
     local result = {}
@@ -61,12 +90,17 @@ _W.delete = function(self)
         return table.mapper.sql_error('primary key required'), true
     end
 
-    local sql = sprintf("DELETE FROM [%s] WHERE [%s] = %s",
-        table.table_name, table.pk, table.fields[table.pk].fmt);
+    -- local sql = sprintf("DELETE FROM [%s] WHERE [%s] = %s",
+    --     table.table_name, table.pk, table.fields[table.pk].fmt);
+    -- local res, err = self.get_model():prepare(sql, self[table.pk]):query()
+    local res, err = self.get_model():prepare_delete()
+        :set_named('W', '?i = ' .. table.fields[table.pk].fmt, table.pk, self[table.pk]):query()
 
-    self:clear_dirty()
+    if not err then
+        self:clear_dirty()
+    end
 
-    return self.get_model():prepare(sql, self[table.pk]):query()
+    return res, err
 end
 
 _W.save = function(self)
@@ -142,32 +176,6 @@ _W.load = function(self, tbl)
     end
 end
 
--- `tbl` changed
-local as_record = function(model, tbl) 
-    local dirty = {}
-    local mt = setmetatable({
-        get_model = function() return model  end;
-        get_dirty = function() return dirty end;
-        clear_dirty = function() dirty = {} end;
-    }, { __index = _W })
-    mt.__index = mt
-
-    return setmetatable(tbl, mt)
-end
-
-local as_collection = function(resultset)  -- FIXME as iterator
-    local casted = function() 
-        local res = {}
-        for _, v in ipairs(resultset) do
-            table_insert(res, v:casted())
-        end
-        return res
-    end
-    return setmetatable(resultset, {
-        __index = { casted = casted }
-    })
-end
-
 -- never modify the `tbl` argument
 _R.create_record = function(self, tbl)
     local record = as_record(self, {})
@@ -180,9 +188,50 @@ _R.prepare = function(self, sql, ...)
     return self.table.mapper:prepare(sql, ...)
 end
 
+_R.prepare_select = function(self)
+    return self.table.mapper:prepare('select')
+        :append_named('S', '*')
+        :append('from')
+        :append_named('T', '?i', self.table.table_name)
+        :append_named('W', '')
+        :append_named('G', '')
+        :append_named('H', '')
+        :append_named('O', '')
+        :append_named('L', '')
+        :append_named('LOCK', '')
+end
+
+_R.prepare_update = function(self)
+    return self.table.mapper:prepare('update')
+        :append_named('T', '?i', self.table.table_name)
+        :append('set')
+        :append_named('V', '')
+        :append('where')
+        :append_named('W', '')
+        :append_named('L', '')
+end
+
+_R.prepare_insert = function(self)
+    return self.table.mapper:prepare('insert into')
+        :append_named('T', '?i', self.table.table_name)
+        :append('(')
+        :append_named('F', '')
+        :append(') values (')
+        :append_named('V', '')
+        :append(')')
+end
+
+_R.prepare_delete = function(self)
+    return self.table.mapper:prepare('delete from')
+        :append_named('T', '?i', self.table.table_name)
+        :append('where')
+        :append_named('W', '')
+end
+
 _R.find_all = function(self, sql, ...)
-    local fsql = sprintf("SELECT * FROM [%s] WHERE %s", self.table.table_name, sql)
-    local rows, err = self:prepare(fsql, ...):query()
+    -- local fsql = sprintf("SELECT * FROM [%s] WHERE %s", self.table.table_name, sql)
+    -- local rows, err = self:prepare(fsql, ...):query()
+    local rows, err = self:prepare_select():set_named('W', sql, ...):query()
 
     if err then return rows, err end
 
@@ -206,8 +255,8 @@ _R.find_one = function(self, sql, ...)
 end
 
 _R.collect = function(self, sel, ...)
-    local fsql = sprintf("SELECT %s FROM [%s]", sel, self.table.table_name)
-    return self:prepare(fsql, ...)
+    -- local fsql = sprintf("SELECT %s FROM [%s]", sel, self.table.table_name)
+    return self:prepare_select():set_named('S', sel, ...)
 end
 
 local find_one_pattern = '^find_one_by_(.+)$'
