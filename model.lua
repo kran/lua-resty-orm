@@ -14,11 +14,10 @@ local _R = {}  -- read from db
 local _W = {}  -- write to db
 
 local call_hook = function(model, hook_name, ...)
-    local hook = model.table.hooks[hook_name]
+    local hook = model.hooks[hook_name]
     if type(hook) == 'function' then
         return hook(model, ...)
     end
-    return ...
 end
 
 -- `tbl` changed
@@ -34,7 +33,7 @@ local as_record = function(model, tbl)
     return setmetatable(tbl, mt)
 end
 
-local as_collection = function(resultset)  -- FIXME as iterator
+local as_collection = function(resultset)
     local casted = function() 
         local res = {}
         for _, v in ipairs(resultset) do
@@ -68,10 +67,18 @@ _W.get = function(self, key)
         return val
     end
 
-    return cast_out(val)
+    local ok, res = pcall(cast_out, val)
+    if not ok then 
+        return fd.default
+    else
+        return res
+    end
 end
 
 _W.set = function(self, key, val)
+    if val == nil then
+        error(sprintf('value for "%s" is nil', key))
+    end
     local fd = self.get_model().table.fields[key]
     if fd then
         local cast_in = fd.cast and fd.cast[1]
@@ -90,9 +97,6 @@ _W.delete = function(self)
         return table.mapper.sql_error('primary key required'), true
     end
 
-    -- local sql = sprintf("DELETE FROM [%s] WHERE [%s] = %s",
-    --     table.table_name, table.pk, table.fields[table.pk].fmt);
-    -- local res, err = self.get_model():prepare(sql, self[table.pk]):query()
     local res, err = self.get_model():prepare_delete()
         :set_named('W', '?i = ' .. table.fields[table.pk].fmt, table.pk, self[table.pk]):query()
 
@@ -188,12 +192,14 @@ _R.prepare = function(self, sql, ...)
     return self.table.mapper:prepare(sql, ...)
 end
 
-_R.prepare_select = function(self)
+_R.prepare_select = function(self, where, ...)
+    assert(where, 'where condition required')
     return self.table.mapper:prepare('select')
         :append_named('S', '*')
         :append('from')
         :append_named('T', '?i', self.table.table_name)
-        :append_named('W', '')
+        :append('where')
+        :append_named('W', where, ...)
         :append_named('G', '')
         :append_named('H', '')
         :append_named('O', '')
@@ -229,9 +235,10 @@ _R.prepare_delete = function(self)
 end
 
 _R.find_all = function(self, sql, ...)
+    sql = sql or '1 = 1'
     -- local fsql = sprintf("SELECT * FROM [%s] WHERE %s", self.table.table_name, sql)
     -- local rows, err = self:prepare(fsql, ...):query()
-    local rows, err = self:prepare_select():set_named('W', sql, ...):query()
+    local rows, err = self:prepare_select(sql, ...):query()
 
     if err then return rows, err end
 
@@ -280,28 +287,25 @@ local model_index = function(self, key)
     return _R[key]
 end
 
-local model = function(table)
-    return setmetatable({ table = table }, { __index = model_index})
+local model = function(table, name)
+    assert(name, 'model name required')
+    local hooks = {}
+    return setmetatable({ table = table, hooks = hooks, name = name }, { __index = model_index})
 end
 
-local define_table = function(mapper)
-    local hooks = { }
+return function(mapper)
+    -- local hooks = { }
     return function(table_name, pk, fields)
         return { 
             model      = model;
             table_name = table_name;
             pk         = pk;
             mapper     = mapper;
-            hooks      = hooks;
+            -- hooks      = hooks;
             fields     = fields;
             get_schema = function()
                 return mapper.driver.get_schema(table_name)
-            end 
+            end;
         }
     end
 end
-
-return function(mapper)
-    return define_table(mapper)
-end
-

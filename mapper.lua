@@ -18,12 +18,12 @@ local _P = setmetatable({ __type = 'P' }, {
     __tostring = function(self) return self:tosql() end
 })
 
-local sql_error = function(err)
+local sql_error = function(err, code)
     local striped = false
     if type(err) == 'string' then
         striped = err:match("([^\\/]+%.lua:%d+:.+)$")  -- trim application path
     end
-    return setmetatable({ err =  striped or err}, {
+    return setmetatable({ err =  striped or err, code = code }, {
         __index = function(self) return self end;
         __call  = function(self) return self, true end; --> res, err
     })
