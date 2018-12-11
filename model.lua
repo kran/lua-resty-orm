@@ -192,14 +192,14 @@ _R.prepare = function(self, sql, ...)
     return self.table.mapper:prepare(sql, ...)
 end
 
-_R.prepare_select = function(self, where, ...)
-    assert(where, 'where condition required')
+_R.prepare_select = function(self)
+    -- assert(where, 'where condition required')
     return self.table.mapper:prepare('select')
         :append_named('S', '*')
         :append('from')
         :append_named('T', '?i', self.table.table_name)
         :append('where')
-        :append_named('W', where, ...)
+        :append_named('W', '') 
         :append_named('G', '')
         :append_named('H', '')
         :append_named('O', '')
@@ -236,9 +236,12 @@ end
 
 _R.find_all = function(self, sql, ...)
     sql = sql or '1 = 1'
+    if type(sql) == 'table' then
+        sql = table_concat(sql, ' ')
+    end
     -- local fsql = sprintf("SELECT * FROM [%s] WHERE %s", self.table.table_name, sql)
     -- local rows, err = self:prepare(fsql, ...):query()
-    local rows, err = self:prepare_select(sql, ...):query()
+    local rows, err = self:prepare_select():set_named('W', sql, ...):query()
 
     if err then return rows, err end
 
@@ -263,7 +266,7 @@ end
 
 _R.collect = function(self, sel, ...)
     -- local fsql = sprintf("SELECT %s FROM [%s]", sel, self.table.table_name)
-    return self:prepare_select():set_named('S', sel, ...)
+    return self:prepare_select():set_named('S', sel, ...):set_named('W', '1 = 1')
 end
 
 local find_one_pattern = '^find_one_by_(.+)$'
